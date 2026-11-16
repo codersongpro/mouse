@@ -113,6 +113,16 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
+## 랜딩페이지 (Vercel)
+
+`site/` 폴더는 ClassZoom 소개·다운로드 페이지입니다. 빌드가 필요 없는 정적 페이지라서 그대로 배포됩니다.
+
+1. [vercel.com](https://vercel.com)에서 **Add New → Project → `codersongpro/mouse` 가져오기(Import)**
+2. **Root Directory**를 `site`로 정합니다 (Framework Preset: Other, Build Command 비움).
+3. **Deploy**를 누릅니다. 이후 main에 올릴 때마다 자동으로 다시 배포됩니다.
+
+다운로드 버튼은 열릴 때 GitHub에서 최신 릴리스를 읽어 zip 파일로 바로 연결됩니다. 새 버전을 릴리스해도 페이지를 고칠 필요가 없습니다.
+
 ## 파일 구성
 
 ```
@@ -123,6 +133,7 @@ windows/사용안내.txt      zip에 함께 들어가는 안내문
 shared/                  아이콘 (icon.png 앱 아이콘, *_color.png 위젯 버튼)
 version.txt              설정 창의 "새 버전 확인"이 읽는 파일
 .github/workflows/       exe 자동 빌드·릴리스
+site/                    랜딩페이지 (Vercel, Root Directory = site)
 ```
 
 ## 라이선스
