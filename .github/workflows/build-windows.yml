@@ -47,9 +47,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Force tools/ahk, tools/ahk2exe | Out-Null
-          Invoke-WebRequest https://www.autohotkey.com/download/ahk-v2.zip -OutFile tools/ahk.zip
+          # autohotkey.com은 CI 서버의 내려받기를 막으므로(Cloudflare) 공식 GitHub 릴리스에서 받는다
+          $hdr = @{ Authorization = "Bearer $env:GH_TOKEN" }
+          $ahkRel = Invoke-RestMethod https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest -Headers $hdr
+          $ahkAsset = $ahkRel.assets | Where-Object { $_.name -like 'AutoHotkey_2*.zip' } | Select-Object -First 1
+          if (-not $ahkAsset) { throw "AutoHotkey v2 zip not found in $($ahkRel.tag_name)" }
+          Write-Host "AutoHotkey $($ahkRel.tag_name)"
+          Invoke-WebRequest $ahkAsset.browser_download_url -OutFile tools/ahk.zip
           Expand-Archive tools/ahk.zip tools/ahk -Force
-          $rel = Invoke-RestMethod https://api.github.com/repos/AutoHotkey/Ahk2Exe/releases/latest -Headers @{ Authorization = "Bearer $env:GH_TOKEN" }
+          $rel = Invoke-RestMethod https://api.github.com/repos/AutoHotkey/Ahk2Exe/releases/latest -Headers $hdr
           $asset = $rel.assets | Where-Object { $_.name -like '*.zip' } | Select-Object -First 1
           Write-Host "Ahk2Exe $($rel.tag_name)"
           Invoke-WebRequest $asset.browser_download_url -OutFile tools/ahk2exe.zip
