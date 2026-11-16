@@ -1,0 +1,4 @@
+dist/
+*.zip
+windows/settings.ini
+windows/*.exe

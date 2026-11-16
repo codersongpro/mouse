@@ -1,0 +1,116 @@
+# Windows exe 빌드 / 배포
+#
+# - main에 올릴 때마다: 문법 검사 → exe 컴파일 → zip을 "Artifacts"로 올림 (Actions 탭에서 받기)
+# - v로 시작하는 태그(예: v2.1.0)를 올리면: 위와 같이 만든 zip으로 GitHub 릴리스를 만듦
+# - Actions 탭에서 "Run workflow"로 손으로 돌릴 수도 있음
+#
+# 버전 번호는 windows/focus-draw.ahk의 APP_VERSION 한 곳에서 읽는다.
+# 태그를 달 때는 태그(v2.1.0)와 APP_VERSION(2.1.0)이 같아야 한다 — 다르면 멈춘다.
+
+name: Build Windows exe
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write # 릴리스를 만들 때만 쓴다
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: ver
+        run: |
+          $m = Select-String -Path windows/focus-draw.ahk -Pattern '^APP_VERSION := "([^"]+)"' | Select-Object -First 1
+          if (-not $m) { throw "APP_VERSION not found" }
+          $v = $m.Matches[0].Groups[1].Value
+          $sv = Select-String -Path windows/focus-draw.ahk -Pattern '^;@Ahk2Exe-SetVersion (.+)$' | Select-Object -First 1
+          if ($sv.Matches[0].Groups[1].Value.Trim() -ne $v) { throw "SetVersion and APP_VERSION differ" }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$v") {
+            throw "Tag $env:GITHUB_REF_NAME does not match APP_VERSION $v"
+          }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $v"
+
+      - name: Download AutoHotkey v2 and Ahk2Exe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force tools/ahk, tools/ahk2exe | Out-Null
+          Invoke-WebRequest https://www.autohotkey.com/download/ahk-v2.zip -OutFile tools/ahk.zip
+          Expand-Archive tools/ahk.zip tools/ahk -Force
+          $rel = Invoke-RestMethod https://api.github.com/repos/AutoHotkey/Ahk2Exe/releases/latest -Headers @{ Authorization = "Bearer $env:GH_TOKEN" }
+          $asset = $rel.assets | Where-Object { $_.name -like '*.zip' } | Select-Object -First 1
+          Write-Host "Ahk2Exe $($rel.tag_name)"
+          Invoke-WebRequest $asset.browser_download_url -OutFile tools/ahk2exe.zip
+          Expand-Archive tools/ahk2exe.zip tools/ahk2exe -Force
+          Get-ChildItem tools/ahk -Filter AutoHotkey64.exe -Recurse | Select-Object -First 1 | ForEach-Object { "AHK_EXE=$($_.FullName)" >> $env:GITHUB_ENV }
+          Get-ChildItem tools/ahk2exe -Filter Ahk2Exe.exe -Recurse | Select-Object -First 1 | ForEach-Object { "AHK2EXE=$($_.FullName)" >> $env:GITHUB_ENV }
+
+      # 스크립트를 실행하지 않고 읽어 들이기만 해서 문법·#Include 오류를 잡는다
+      - name: Validate script
+        run: |
+          $p = Start-Process $env:AHK_EXE -ArgumentList '/ErrorStdOut=UTF-8', '/validate', 'focus-draw.ahk' `
+            -WorkingDirectory windows -Wait -PassThru -NoNewWindow -RedirectStandardError validate.log
+          Get-Content validate.log -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { throw "Script validation failed ($($p.ExitCode))" }
+
+      - name: Compile exe
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $out = Join-Path $PWD 'dist/focus-draw.exe'
+          $p = Start-Process $env:AHK2EXE -ArgumentList '/in', 'focus-draw.ahk', '/out', "`"$out`"", '/base', "`"$env:AHK_EXE`"", '/silent', 'verbose' `
+            -WorkingDirectory windows -Wait -PassThru -NoNewWindow -RedirectStandardOutput compile.log
+          Get-Content windows/compile.log, compile.log -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0 -or -not (Test-Path $out)) { throw "Compile failed ($($p.ExitCode))" }
+          Get-Item $out | Format-List Name, Length, VersionInfo
+
+      - name: Package zip
+        id: pkg
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $dir = 'dist/Focus & Draw'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Move-Item dist/focus-draw.exe $dir
+          Copy-Item windows/사용안내.txt $dir
+          Copy-Item LICENSE "$dir/LICENSE.txt"
+          $zip = "dist/Focus-Draw-$v-zoom.zip"
+          Compress-Archive -Path $dir -DestinationPath $zip -Force
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          "sha=$hash" >> $env:GITHUB_OUTPUT
+          Write-Host "$zip  SHA-256 $hash"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Focus-Draw-${{ steps.ver.outputs.version }}-zoom
+          path: ${{ steps.pkg.outputs.zip }}
+
+      - name: Create GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = @"
+          Focus & Draw $('${{ steps.ver.outputs.version }}') — 라이브 확대 추가판 (Windows 10 / 11)
+
+          **내려받기:** 아래 ``$(Split-Path '${{ steps.pkg.outputs.zip }}' -Leaf)``를 받아 압축을 풀고 ``focus-draw.exe``를 실행하세요.
+          파란 "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누르세요.
+
+          - F7 / 위젯 돋보기: 실시간 확대 (Ctrl+휠 배율, Esc 끄기)
+          - 화면 공유·녹화에 확대 화면이 그대로 보이고 커서는 하나만 보입니다
+          - 원작 maker-SSAM/focus-draw 2.0.1의 강조·드로잉 기능 모두 포함
+
+          SHA-256: ``${{ steps.pkg.outputs.sha }}``
+          "@
+          gh release create $env:GITHUB_REF_NAME '${{ steps.pkg.outputs.zip }}' --title "Focus & Draw $env:GITHUB_REF_NAME (라이브 확대)" --notes $notes
