@@ -3,14 +3,14 @@
 
 ; ================= 컴파일(Ahk2Exe) 설정 =================
 ; 아래 줄들은 평범한 주석이라 .ahk로 그냥 실행할 때는 아무 영향이 없고, Ahk2Exe로 exe를
-; 만들 때만 읽힌다. focus-draw.ico는 ..\shared\icon.png를 16~256px 여러 크기로 담아 변환한 파일이다
+; 만들 때만 읽힌다. classzoom.ico는 ..\shared\icon.png를 16~256px 여러 크기로 담아 변환한 파일이다
 ; (작업표시줄·바탕화면·파일 탐색기가 상황에 따라 다른 크기를 골라 쓰기 때문에 여러 크기가 필요).
 ; 컴파일된 exe는 이 아이콘을 파일 아이콘이자 트레이 아이콘으로 함께 사용한다.
-;@Ahk2Exe-SetMainIcon focus-draw.ico
-;@Ahk2Exe-SetName Focus & Draw
-;@Ahk2Exe-SetDescription Focus & Draw - 마우스 강조 / 화면 드로잉 / 라이브 확대
-;@Ahk2Exe-SetVersion 2.1.0
-;@Ahk2Exe-SetCopyright (c) 2026 maker_SSAM (MIT License) / 라이브 확대 추가판
+;@Ahk2Exe-SetMainIcon classzoom.ico
+;@Ahk2Exe-SetName ClassZoom
+;@Ahk2Exe-SetDescription ClassZoom - 실시간 화면 확대 / 마우스 강조 / 화면 드로잉
+;@Ahk2Exe-SetVersion 1.0.0
+;@Ahk2Exe-SetCopyright ClassZoom (c) 2026 codersongpro. Based on Focus & Draw (c) 2026 maker_SSAM. MIT License
 
 Persistent()
 SetWinDelay(-1)
@@ -24,47 +24,43 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "2.1.0" ; 원작 2.0.1 + 라이브 확대
+APP_VERSION := "1.0.0" ; ClassZoom 첫 판 (원작 Focus & Draw 2.0.1 바탕)
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
-; 이 판(라이브 확대 추가판)은 codersongpro/mouse 저장소에서 배포한다. 원작 저장소의 버전 파일을 읽으면
-; 확대가 없는 원작 최신판으로 안내하게 되므로 이 저장소를 본다.
+; ClassZoom은 codersongpro/mouse 저장소에서 배포한다(원작 Focus & Draw와 별개의 프로그램).
 UPDATE_FILE_URL := "https://raw.githubusercontent.com/codersongpro/mouse/main/version.txt"
 RELEASES_URL := "https://github.com/codersongpro/mouse/releases/latest"
-AUTHOR_URL := "https://maker-ssam.github.io/"
+AUTHOR_URL := "https://github.com/maker-SSAM/focus-draw" ; 설정 창의 "원작" 링크
 updateReq := "", updateDeadline := 0, updateUrl := RELEASES_URL, lblUpdate := ""
 
-A_IconTip := "Focus & Draw v" APP_VERSION " - 마우스 강조 / 화면 드로잉 / 확대"
+A_IconTip := "ClassZoom v" APP_VERSION " - 화면 확대 / 마우스 강조 / 화면 드로잉"
 
 ; 컴파일된 exe는 위 SetMainIcon으로 넣은 아이콘을 트레이 아이콘으로도 그대로 쓰지만,
 ; .ahk 소스로 직접 실행할 때는 AutoHotkey 기본 아이콘(초록색 H)이 뜬다. 소스로 실행할 때도
 ; 같은 그림이 보이도록 같은 폴더의 ico 파일을 지정한다. (exe는 아이콘을 이미 품고 있어서
 ; 건드릴 필요가 없고, ico 파일을 exe에 또 넣으면 같은 그림이 두 번 들어가 크기만 커진다)
-if !A_IsCompiled && FileExist(A_ScriptDir "\focus-draw.ico")
-    TraySetIcon(A_ScriptDir "\focus-draw.ico")
+if !A_IsCompiled && FileExist(A_ScriptDir "\classzoom.ico")
+    TraySetIcon(A_ScriptDir "\classzoom.ico")
 
 SETTINGS_PATH := A_ScriptDir "\settings.ini"
 
 ; 컴파일된 exe에도 아이콘 파일이 그대로 들어가도록 FileInstall로 함께 담고, 실행 시 임시 폴더로 꺼내 쓴다.
 ; (위젯/트레이 아이콘 둘 다 이 경로를 쓰므로 다른 UI보다 먼저 준비해둔다)
 ; 아이콘 그림은 맥 판과 같이 쓰므로 저장소의 shared 폴더에 있다 (이 스크립트 기준 ..\shared).
-FileInstall("..\shared\icon_spotlight.png", A_Temp "\tt_icon_spotlight.png", true)
-FileInstall("..\shared\icon_draw.png", A_Temp "\tt_icon_draw.png", true)
-FileInstall("..\shared\icon_spotlight_dark.png", A_Temp "\tt_icon_spotlight_dark.png", true)
-FileInstall("..\shared\icon_draw_dark.png", A_Temp "\tt_icon_draw_dark.png", true)
-FileInstall("..\shared\settings.png", A_Temp "\tt_icon_settings.png", true)
-FileInstall("..\shared\icon_zoom_dark.png", A_Temp "\tt_icon_zoom_dark.png", true)
+; 위젯 버튼과 트레이 바로가기 아이콘은 같은 **컬러 아이콘**을 쓴다(ClassZoom).
+FileInstall("..\shared\icon_spotlight_color.png", A_Temp "\cz_btn_spotlight.png", true)
+FileInstall("..\shared\icon_draw_color.png", A_Temp "\cz_btn_draw.png", true)
+FileInstall("..\shared\icon_settings_color.png", A_Temp "\cz_btn_settings.png", true)
+FileInstall("..\shared\icon_zoom_color.png", A_Temp "\cz_btn_zoom.png", true)
 ; 설정 창의 "드로잉 모드 단축키 보기" 버튼이 띄우는 안내 그림. 아이콘과 달리 화면에 그대로 보여주기만
 ; 하므로 색을 입히거나 하지 않는다. (그림을 바꾸려면 shortcuts.png만 갈아끼우면 된다)
-FileInstall("shortcuts.png", A_Temp "\tt_shortcuts.png", true)
-ICON_SPOT_PATH := A_Temp "\tt_icon_spotlight.png"
-ICON_DRAW_PATH := A_Temp "\tt_icon_draw.png"
-ICON_SPOT_DARK_PATH := A_Temp "\tt_icon_spotlight_dark.png"
-ICON_DRAW_DARK_PATH := A_Temp "\tt_icon_draw_dark.png"
-ICON_SETTINGS_PATH := A_Temp "\tt_icon_settings.png"
-ICON_ZOOM_DARK_PATH := A_Temp "\tt_icon_zoom_dark.png"
-SHORTCUT_IMAGE_PATH := A_Temp "\tt_shortcuts.png"
+FileInstall("shortcuts.png", A_Temp "\cz_shortcuts.png", true)
+ICON_SPOT_DARK_PATH := A_Temp "\cz_btn_spotlight.png"
+ICON_DRAW_DARK_PATH := A_Temp "\cz_btn_draw.png"
+ICON_SETTINGS_PATH := A_Temp "\cz_btn_settings.png"
+ICON_ZOOM_DARK_PATH := A_Temp "\cz_btn_zoom.png"
+SHORTCUT_IMAGE_PATH := A_Temp "\cz_shortcuts.png"
 
 ; ================= GDI+ 초기화 (PNG 아이콘 불러오기/색 입히기용) =================
 gdipStartupInput := Buffer(24, 0)
@@ -264,7 +260,7 @@ SaveSettings() {
             . "압축을 풀어 바탕화면이나 문서 폴더로 옮긴 뒤 다시 실행해 주세요.`n`n"
             . "방금 바꾼 설정은 프로그램을 끄기 전까지는 그대로 쓰실 수 있습니다.`n`n"
             . "(자세한 이유: " err.Message ")"
-            , "Focus & Draw — 설정 저장 실패", "Icon!")
+            , "ClassZoom — 설정 저장 실패", "Icon!")
         return false
     }
 }
@@ -391,7 +387,7 @@ LoadSettings()
 ; 컴파일했을 때와 .ahk 소스로 실행할 때 모두 지금 실행 중인 파일의 실제 경로(A_ScriptFullPath)를
 ; 그대로 써서, 둘 중 어느 형태로 실행 중이든 그 형태로 다시 켜지게 한다.
 STARTUP_RUN_KEY := "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
-STARTUP_RUN_NAME := "FocusDraw"
+STARTUP_RUN_NAME := "ClassZoom" ; 원작 Focus & Draw와 겹치지 않게
 
 IsRunAtStartup() {
     global STARTUP_RUN_KEY, STARTUP_RUN_NAME
@@ -729,7 +725,7 @@ ClearBackBuffer()
 ; 그러면 판서 중에 위젯을 눌러도 클릭이 오버레이에 막혀 아무 일도 일어나지 않는다
 ; (한 획 긋고 나면 위젯으로 끄지 못하던 원인이 이것이었다). 오버레이는 포커스를 받을 일이
 ; 없으므로(단축키는 전역이고 그리기는 마우스 상태를 직접 읽는다) 활성화를 막아도 손해가 없다.
-drawGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x8080000", "FocusDraw-Draw")
+drawGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x8080000", "ClassZoom-Draw")
 drawGui.Show("x" vx " y" vy " w" vw " h" vh " Hide")
 
 ; ================= 레이저 펜 (A를 누르고 긋기) =================
@@ -748,7 +744,7 @@ drawGui.Show("x" vx " y" vy " w" vw " h" vh " Hide")
 LASER_HOLD_MS := 500     ; 그어진 뒤 그대로 있는 시간 (기본값. 실제로는 설정값 laserHold)
 LASER_FADE_MS := 500     ; 그 뒤 사라지는 데 걸리는 시간 (기본값. 실제로는 설정값 laserFade)
 LASER_MIN_WIDTH := 8     ; 펜을 가늘게 해둬도 레이저는 이만큼은 굵게 (너무 가늘면 빛나 보이지 않는다)
-laserGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x8080020", "FocusDraw-Laser")
+laserGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x8080020", "ClassZoom-Laser")
 laserGui.Show("x" vx " y" vy " w" vw " h" vh " Hide")
 ; 그림판은 A를 처음 누를 때 만들고 드로잉을 끄면 돌려준다 — 반투명 획 전용 판과 같은 이유다
 ; (EnsureLaserCanvas / LaserClearAll).
@@ -1381,7 +1377,7 @@ boardAlpha := 100 ; 지금 깔린 칠판의 불투명도(%)
 
 ; 색 배열이 모두 준비된 지금 설정 파일의 값을 덮어씌운다 (위 LoadPalette 설명 참고)
 LoadPalette()
-boardGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80020", "FocusDraw-Board")
+boardGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80020", "ClassZoom-Board")
 boardGui.Show("x" vx " y" vy " w" vw " h" vh " Hide")
 WinSetTransparent(255, boardGui) ; 레이어드 창이지만 불투명하게 — 클릭 통과만 쓴다
 
@@ -1431,7 +1427,7 @@ MakeBoardSetter(index) => (*) => SetBoardColor(BOARD_COLORS[index], BOARD_ALPHAS
 STEP_BADGE_W := 30, STEP_BADGE_H := 24 ; 배지 크기
 STEP_BADGE_MS := 500 ; 화면에 머무는 시간(ms)
 STEP_BADGE_GAP := 22 ; 커서 중심에서 배지 왼쪽 위까지의 거리 — **굵기와 무관하게 늘 같다**
-stepGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80020", "FocusDraw-Step")
+stepGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80020", "ClassZoom-Step")
 stepGui.Show("w" STEP_BADGE_W " h" STEP_BADGE_H " Hide")
 stepCanvas := ""
 stepFontFamily := 0, stepFont := 0, stepFormat := 0
@@ -1554,7 +1550,7 @@ HideStepNumber() {
 ; E0x20(WS_EX_TRANSPARENT)을 준 창은 MouseGetPos와 WindowFromPoint 양쪽에서 건너뛴다(직접
 ; 확인함). 그래서 이 창이 커서 밑에 깔려 있어도 DrawPoll의 "커서 아래 창이 판서 오버레이인가"
 ; 판정을 가리지 않는다 — 위젯 클릭이나 캡처 도구 감지가 그대로 동작한다.
-brushGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80020", "FocusDraw-Brush")
+brushGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80020", "ClassZoom-Brush")
 brushGui.Show("w16 h16 Hide")
 brushCanvas := ""
 brushPad := 0 ; 원의 중심이 창 왼쪽 위에서 얼마나 떨어져 있는지 (창을 놓을 위치 계산에 쓴다)
@@ -2967,7 +2963,7 @@ PushCanvasToWindow(hwnd, c, x, y, constAlpha := 255) {
 
 ; ================= 마우스 강조(스포트라이트) 창 =================
 ; 그림은 크기·색·투명도가 바뀔 때만 다시 그리고, 마우스를 따라다닐 때는 위치만 옮긴다.
-spotGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80020", "FocusDraw-Spot") ; 0x80000 = 레이어드, 0x20 = 클릭 통과
+spotGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80020", "ClassZoom-Spot") ; 0x80000 = 레이어드, 0x20 = 클릭 통과
 spotGui.Show("w" SpotSize " h" SpotSize " Hide")
 spotCanvas := ""
 
@@ -3029,7 +3025,7 @@ clickAnim := Map(
     "L", {gui: 0, canvas: "", frame: 0},
     "R", {gui: 0, canvas: "", frame: 0})
 for side in ["L", "R"] {
-    g := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80020", "FocusDraw-Click" side) ; 0x80000 = 레이어드, 0x20 = 클릭 통과
+    g := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80020", "ClassZoom-Click" side) ; 0x80000 = 레이어드, 0x20 = 클릭 통과
     g.Show("w" SpotSize " h" SpotSize " Hide")
     clickAnim[side].gui := g
 }
@@ -3817,7 +3813,7 @@ ResetAllSettings() {
         . "색과 굵기, 숫자키·칠판 색, 위젯 자리와 크기, 단축키까지 전부 처음 값으로 돌아가며 "
         . "되돌릴 수 없습니다.`n`n"
         . "(Windows 시작 시 자동 실행은 그대로 둡니다)"
-        , "Focus & Draw - 모든 설정값 초기화", "YesNo Icon? Default2")
+        , "ClassZoom - 모든 설정값 초기화", "YesNo Icon? Default2")
     if (answer != "Yes")
         return
 
@@ -3827,7 +3823,7 @@ ResetAllSettings() {
         MsgBox("설정 파일을 지우지 못했습니다.`n`n" SETTINGS_PATH "`n`n"
             . "쓰기가 막힌 폴더에 두었을 때 생깁니다. 압축을 풀어 바탕화면이나 문서 폴더로 "
             . "옮긴 뒤 다시 시도해 주세요."
-            , "Focus & Draw - 모든 설정값 초기화", "Icon!")
+            , "ClassZoom - 모든 설정값 초기화", "Icon!")
         return
     }
 
@@ -3902,7 +3898,7 @@ OpenSettingsWindow(*) {
     global laserHold, laserFade, laserGlow
     global SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, widget, settingsGui, hideCursorOnHighlight, spotlightOn, APP_VERSION, drawOn, chkWidgetCtrl, widgetScale, widgetOpacity
     global paletteBar, PALETTE_X, PALETTE_Y, PALETTE_W, PALETTE_H, lblUpdate
-    global zoomDefaultPct, zoomSmooth
+    global zoomSteps, zoomSmooth
 
     ; 판서 모드는 화면 전체를 오버레이로 덮어서 "그리기 말고는 아무것도 클릭되지 않는" 상태로
     ; 만드는 게 목적이라, 설정 창도 그 아래에 깔려 조작할 수 없다. 설정 창을 띄우려고 했다는
@@ -3922,7 +3918,7 @@ OpenSettingsWindow(*) {
     ; ToolWindow를 안 써야 작업표시줄/Alt+Tab에 정상적으로 뜬다. AlwaysOnTop은 일부러 쓰지
     ; 않는다 — 항상 위로 올리면 강조 하이라이트(이 창도 AlwaysOnTop이다)가 설정 창 뒤로
     ; 가려져서, 크기와 투명도를 눈으로 보면서 맞출 수 없다.
-    settingsGui := Gui(, "Focus & Draw 설정")
+    settingsGui := Gui(, "ClassZoom 설정")
     ; 숫자칸(Edit)은 흰 배경이라, 창 배경을 살짝 다른 톤으로 두어야 둥근 모서리 바깥으로
     ; 비치는 색이 또렷하게 구분되어 보인다.
     settingsGui.BackColor := "F2F2F2"
@@ -4003,15 +3999,17 @@ OpenSettingsWindow(*) {
 
     tabs.UseTab("확대")
     ; 라이브 확대 (zoom.ahk). 저장을 눌러야 다음 실행에도 남는다([Zoom] Level·Smooth).
-    AddSliderRow(settingsGui, 52, "기본 배율", ZOOM_MIN_PCT, ZOOM_MAX_PCT, zoomDefaultPct, "%"
-        , (v) => ZoomApplyDefaultLevel(v), 25)
-    chkZoomSmooth := settingsGui.AddCheckbox("x30 y96 w20 h20 " (zoomSmooth ? "Checked" : ""), "")
-    settingsGui.AddText("x54 y97 w380", "부드럽게 움직이기 (끄면 커서를 바로 따라갑니다)")
+    ; 3단계 배율. 단축키(F7)·위젯 돋보기를 누를 때마다 1 → 2 → 3단계 → 끄기 순서로 간다.
+    AddSliderRow(settingsGui, 52, "1단계", ZOOM_MIN_PCT, ZOOM_MAX_PCT, zoomSteps[1], "%", (v) => ZoomApplyStepLevel(1, v), 25)
+    AddSliderRow(settingsGui, 86, "2단계", ZOOM_MIN_PCT, ZOOM_MAX_PCT, zoomSteps[2], "%", (v) => ZoomApplyStepLevel(2, v), 25)
+    AddSliderRow(settingsGui, 120, "3단계", ZOOM_MIN_PCT, ZOOM_MAX_PCT, zoomSteps[3], "%", (v) => ZoomApplyStepLevel(3, v), 25)
+    chkZoomSmooth := settingsGui.AddCheckbox("x30 y164 w20 h20 " (zoomSmooth ? "Checked" : ""), "")
+    settingsGui.AddText("x54 y165 w380", "부드럽게 움직이기 (끄면 커서를 바로 따라갑니다)")
     chkZoomSmooth.OnEvent("Click", (ctrl, *) => (zoomSmooth := ctrl.Value ? true : false))
-    settingsGui.AddText("x30 y136 w420 h2 0x10")
-    lblZoomHelp := settingsGui.AddText("x30 y148 w420 h300"
-        , "• 켜고 끄기: 단축키(기본 F7) 또는 위젯의 돋보기 버튼`n"
-        . "• 확대 중 Ctrl + 마우스 휠: 배율 조절   /   Esc: 확대 끄기`n`n"
+    settingsGui.AddText("x30 y200 w420 h2 0x10")
+    lblZoomHelp := settingsGui.AddText("x30 y212 w420 h300"
+        , "• F7 또는 위젯의 돋보기 버튼을 누를 때마다: 1단계 → 2단계 → 3단계 → 끄기`n"
+        . "• 확대 중 Ctrl + 마우스 휠: 단계 올리기·내리기   /   Esc: 확대 끄기`n`n"
         . "• 화면을 캡처한 그림이 아니라 실시간 화면입니다. 영상도 그대로 움직입니다.`n"
         . "• 마우스를 움직이면 화면이 따라가고, 커서가 가리키는 곳이 그대로 클릭됩니다.`n"
         . "• 드로잉(F9)을 켜면 화면이 고정됩니다. 커서를 화면 가장자리로 밀면 그쪽으로 이동합니다.`n`n"
@@ -4068,10 +4066,10 @@ OpenSettingsWindow(*) {
     ; 자리가 여기라서, 위젯이나 트레이 툴팁 대신 이곳을 골랐다. 탭 아래 가운데에 둔다.
     ; +0x80 = SS_NOPREFIX. 이게 없으면 Text 컨트롤이 &를 단축키 표시용 기호로 삼아 먹어버려서
     ; "Focus & Draw"가 "Focus  Draw"로 나온다 (뒤 글자에 밑줄만 그어진다).
-    lblVersion := settingsGui.AddText("x22 y500 w436 Center +0x80", "Focus & Draw 버전 " APP_VERSION)
+    lblVersion := settingsGui.AddText("x22 y500 w436 Center +0x80", "ClassZoom 버전 " APP_VERSION)
     lblVersion.SetFont("s9 c999999")
     ; 제작자 이름을 누르면 개인페이지가 열린다 (링크처럼 보이게 파란 밑줄 글씨)
-    lblAuthor := settingsGui.AddText("x22 y520 w436 Center", "제작자: maker_SSAM")
+    lblAuthor := settingsGui.AddText("x22 y520 w436 Center +0x80", "원작: Focus & Draw (maker_SSAM, MIT 라이선스)")
     lblAuthor.SetFont("s9 c0066CC underline")
     lblAuthor.OnEvent("Click", (*) => Run(AUTHOR_URL))
 
@@ -4372,7 +4370,7 @@ ShowShortcutGuide(*) {
     pImg := 0
     DllCall("gdiplus\GdipLoadImageFromFile", "wstr", SHORTCUT_IMAGE_PATH, "ptr*", &pImg)
     if !pImg {
-        MsgBox("단축키 안내 그림을 열지 못했습니다.`n`n" SHORTCUT_IMAGE_PATH, "Focus & Draw - 단축키", "Icon!")
+        MsgBox("단축키 안내 그림을 열지 못했습니다.`n`n" SHORTCUT_IMAGE_PATH, "ClassZoom - 단축키", "Icon!")
         return
     }
     imgW := 0, imgH := 0
@@ -4388,7 +4386,7 @@ ShowShortcutGuide(*) {
     DllCall("gdiplus\GdipCloneBitmapAreaI", "int", 0, "int", 0, "int", imgW, "int", imgH, "int", 0x26200A, "ptr", pImg, "ptr*", &pBase)
     DllCall("gdiplus\GdipDisposeImage", "ptr", pImg)
     if !pBase {
-        MsgBox("단축키 안내 그림을 불러오지 못했습니다.`n`n" SHORTCUT_IMAGE_PATH, "Focus & Draw - 단축키", "Icon!")
+        MsgBox("단축키 안내 그림을 불러오지 못했습니다.`n`n" SHORTCUT_IMAGE_PATH, "ClassZoom - 단축키", "Icon!")
         return
     }
     PaintGuideBars(pBase, imgW, imgH)
@@ -4405,14 +4403,14 @@ ShowShortcutGuide(*) {
     hShortcutBmp := ScaledHBitmapFromImage(pBase, dstW, dstH)
     DllCall("gdiplus\GdipDisposeImage", "ptr", pBase)
     if !hShortcutBmp {
-        MsgBox("단축키 안내 그림을 불러오지 못했습니다.`n`n" SHORTCUT_IMAGE_PATH, "Focus & Draw - 단축키", "Icon!")
+        MsgBox("단축키 안내 그림을 불러오지 못했습니다.`n`n" SHORTCUT_IMAGE_PATH, "ClassZoom - 단축키", "Icon!")
         return
     }
 
     ; 설정 창 뒤로 숨지 않도록 항상 위에 둔다. 읽기만 하는 창이라 다른 작업을 가릴 일이 없고,
     ; Esc나 창 닫기로 바로 닫힌다. (설정 창과 달리 화면을 보면서 맞출 값이 없으므로
     ;  AlwaysOnTop이 걸림돌이 되지 않는다)
-    shortcutGui := Gui("-DPIScale -MaximizeBox -MinimizeBox +AlwaysOnTop", "Focus & Draw - 단축키")
+    shortcutGui := Gui("-DPIScale -MaximizeBox -MinimizeBox +AlwaysOnTop", "ClassZoom - 단축키")
     shortcutGui.MarginX := 0
     shortcutGui.MarginY := 0
     shortcutGui.BackColor := HexColor(stripBg)
@@ -4451,11 +4449,15 @@ widgetH := 40
 ; 합성해서 하나의 완성된 그림만 컨트롤에 넣는다 — 별도 겹침이 없으니 항상 정확하게 보인다.
 CHIP_SIZE := 32
 CHIP_CORNER := 12
-CHIP_ICON_SIZE := 22
+CHIP_ICON_SIZE := 24 ; 컬러 아이콘은 조금 크게 둬야 색이 또렷하다
 WIDGET_BG_COLOR := 0xF2F2F2
 ICON_OFF_COLOR := 0x000000
 ; 켜짐 상태를 표시할 색 — 위젯 버튼과 트레이 바로가기 아이콘이 같은 색을 쓴다.
 TRAY_ON_COLOR := 0x0A84FF
+; ClassZoom 위젯: 아이콘은 늘 원래 색으로 두고, 켜짐은 버튼 바탕을 하늘색으로 바꿔 보여준다
+ICON_KEEP_COLOR := -1
+CHIP_OFF_FILL := 0xFFFFFF
+CHIP_ON_FILL := 0xBFDBFE
 
 RenderButtonBitmap(fillColor, bgColor, size, corner, iconPath, iconSize, iconColor) {
     hdcScreen := DllCall("GetDC", "ptr", 0, "ptr")
@@ -4494,6 +4496,8 @@ RenderButtonBitmap(fillColor, bgColor, size, corner, iconPath, iconSize, iconCol
     NumPut("Int", iw, lockRect, 8)
     NumPut("Int", ih, lockRect, 12)
     bmd := Buffer(32, 0)
+    ; iconColor가 -1(ICON_KEEP_COLOR)이면 다시 칠하지 않고 컬러 아이콘을 그대로 쓴다
+    if (iconColor >= 0) {
     DllCall("gdiplus\GdipBitmapLockBits", "ptr", pIcon, "ptr", lockRect, "uint", 3, "int", 0x26200A, "ptr", bmd) ; ReadWrite, 32bppARGB
     stride := NumGet(bmd, 8, "Int")
     scan0 := NumGet(bmd, 16, "Ptr")
@@ -4510,11 +4514,13 @@ RenderButtonBitmap(fillColor, bgColor, size, corner, iconPath, iconSize, iconCol
         }
     }
     DllCall("gdiplus\GdipBitmapUnlockBits", "ptr", pIcon, "ptr", bmd)
+    }
 
     ; GDI+로 같은 hdc 위에 다시 칠한 아이콘을 알파값 그대로 합성해 그린다.
     pGraphics := 0
     DllCall("gdiplus\GdipCreateFromHDC", "ptr", hdc, "ptr*", &pGraphics)
     off := (size - iconSize) // 2
+    DllCall("gdiplus\GdipSetInterpolationMode", "ptr", pGraphics, "int", 7) ; 고품질 축소 (컬러 아이콘이 뭉개지지 않게)
     DllCall("gdiplus\GdipDrawImageRectI", "ptr", pGraphics, "ptr", pIcon, "int", off, "int", off, "int", iconSize, "int", iconSize)
     DllCall("gdiplus\GdipDisposeImage", "ptr", pIcon)
     DllCall("gdiplus\GdipDeleteGraphics", "ptr", pGraphics)
@@ -4547,7 +4553,7 @@ BuildWidget() {
     global hBtnSpotOff, hBtnSpotOn, hBtnDrawOff, hBtnDrawOn, hBtnSettings
     global btnZoomOff, btnZoomOn, hBtnZoomOff, hBtnZoomOn, ICON_ZOOM_DARK_PATH, zoomOn
     global widgetW, widgetH, widgetScale, widgetBgColor, widgetX, widgetY
-    global CHIP_SIZE, CHIP_CORNER, CHIP_ICON_SIZE, ICON_OFF_COLOR, TRAY_ON_COLOR
+    global CHIP_SIZE, CHIP_CORNER, CHIP_ICON_SIZE, ICON_OFF_COLOR, TRAY_ON_COLOR, ICON_KEEP_COLOR, CHIP_OFF_FILL, CHIP_ON_FILL
     global ICON_SPOT_DARK_PATH, ICON_DRAW_DARK_PATH, ICON_SETTINGS_PATH
 
     ; 이전 위젯이 있으면 자리를 기억해두고 치운다 (비트맵도 함께 — 안 지우면 조절할 때마다 샌다)
@@ -4572,15 +4578,15 @@ BuildWidget() {
     widgetH := chip + top * 2
     widgetW := pad * 2 + narrow * 2 + chip * 4 + gap * 5 ; 칩 4개: 강조·드로잉·확대·설정
 
-    hBtnSpotOff := RenderButtonBitmap(0xFFFFFF, widgetBgColor, chip, corner, ICON_SPOT_DARK_PATH, icon, ICON_OFF_COLOR)
-    hBtnSpotOn := RenderButtonBitmap(0xFFFFFF, widgetBgColor, chip, corner, ICON_SPOT_DARK_PATH, icon, TRAY_ON_COLOR)
-    hBtnDrawOff := RenderButtonBitmap(0xFFFFFF, widgetBgColor, chip, corner, ICON_DRAW_DARK_PATH, icon, ICON_OFF_COLOR)
-    hBtnDrawOn := RenderButtonBitmap(0xFFFFFF, widgetBgColor, chip, corner, ICON_DRAW_DARK_PATH, icon, TRAY_ON_COLOR)
-    hBtnSettings := RenderButtonBitmap(0xFFFFFF, widgetBgColor, chip, corner, ICON_SETTINGS_PATH, icon, ICON_OFF_COLOR)
-    hBtnZoomOff := RenderButtonBitmap(0xFFFFFF, widgetBgColor, chip, corner, ICON_ZOOM_DARK_PATH, icon, ICON_OFF_COLOR)
-    hBtnZoomOn := RenderButtonBitmap(0xFFFFFF, widgetBgColor, chip, corner, ICON_ZOOM_DARK_PATH, icon, TRAY_ON_COLOR)
+    hBtnSpotOff := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_SPOT_DARK_PATH, icon, ICON_KEEP_COLOR)
+    hBtnSpotOn := RenderButtonBitmap(CHIP_ON_FILL, widgetBgColor, chip, corner, ICON_SPOT_DARK_PATH, icon, ICON_KEEP_COLOR)
+    hBtnDrawOff := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_DRAW_DARK_PATH, icon, ICON_KEEP_COLOR)
+    hBtnDrawOn := RenderButtonBitmap(CHIP_ON_FILL, widgetBgColor, chip, corner, ICON_DRAW_DARK_PATH, icon, ICON_KEEP_COLOR)
+    hBtnSettings := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_SETTINGS_PATH, icon, ICON_KEEP_COLOR)
+    hBtnZoomOff := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_ZOOM_DARK_PATH, icon, ICON_KEEP_COLOR)
+    hBtnZoomOn := RenderButtonBitmap(CHIP_ON_FILL, widgetBgColor, chip, corner, ICON_ZOOM_DARK_PATH, icon, ICON_KEEP_COLOR)
 
-    widget := Gui("+AlwaysOnTop -Caption +ToolWindow", "FocusDraw")
+    widget := Gui("+AlwaysOnTop -Caption +ToolWindow", "ClassZoom")
     widget.BackColor := HexColor(widgetBgColor)
     ; 배경이 어두우면 ⋮와 ✕가 묻히므로 글자색을 뒤집는다 (밝기 기준은 사람 눈의 민감도 가중치)
     widget.SetFont("s" Max(6, WidgetPx(10)) " c" (WidgetIsDark() ? "E6E6E6" : "000000"), "Malgun Gothic")
@@ -4935,10 +4941,18 @@ LoadIconFromPng(path, rgb) {
     stride := NumGet(bmd, 8, "Int")
     scan0 := NumGet(bmd, 16, "Ptr")
 
+    ; ClassZoom: rgb = -1 이면 컬러 그대로, -2 면 회색(꺼짐 표시), 그 밖에는 그 색 한 가지로 칠한다
+    if (rgb != -1)
     loop h {
         rowPtr := scan0 + (A_Index - 1) * stride
         loop w {
             px := rowPtr + (A_Index - 1) * 4
+            if (rgb = -2) {
+                ; 밝기만 남긴다 (사람 눈 민감도 가중치)
+                lum := (NumGet(px, 2, "UChar") * 299 + NumGet(px, 1, "UChar") * 587 + NumGet(px, 0, "UChar") * 114) // 1000
+                NumPut("UChar", lum, "UChar", lum, "UChar", lum, px)
+                continue
+            }
             NumPut("UChar", tb, px, 0) ; B
             NumPut("UChar", tg, px, 1) ; G
             NumPut("UChar", tr, px, 2) ; R (알파는 건드리지 않아 원래 모양 그대로 유지)
@@ -5008,12 +5022,13 @@ IsLightTaskbar() {
 }
 TRAY_OFF_COLOR := IsLightTaskbar() ? 0x1A1A1A : 0xFFFFFF
 
-hIconSpotOff := LoadIconFromPng(ICON_SPOT_PATH, TRAY_OFF_COLOR)
-hIconSpotOn := LoadIconFromPng(ICON_SPOT_PATH, TRAY_ON_COLOR)
-hIconDrawOff := LoadIconFromPng(ICON_DRAW_PATH, TRAY_OFF_COLOR)
-hIconDrawOn := LoadIconFromPng(ICON_DRAW_PATH, TRAY_ON_COLOR)
+; 위젯과 같은 컬러 아이콘을 쓴다. 켜짐 = 컬러 그대로, 꺼짐 = 회색 (ClassZoom)
+hIconSpotOff := LoadIconFromPng(ICON_SPOT_DARK_PATH, -2)
+hIconSpotOn := LoadIconFromPng(ICON_SPOT_DARK_PATH, -1)
+hIconDrawOff := LoadIconFromPng(ICON_DRAW_DARK_PATH, -2)
+hIconDrawOn := LoadIconFromPng(ICON_DRAW_DARK_PATH, -1)
 
-trayHelper := Gui("+ToolWindow", "FocusDraw-TrayHelper")
+trayHelper := Gui("+ToolWindow", "ClassZoom-TrayHelper")
 trayHelper.Show("Hide")
 OnMessage(WM_TRAYBTN, OnQuickTrayClick)
 
@@ -5258,7 +5273,7 @@ ChangeHotkey(name, combo, ctrl) {
     hotkeyApplying := true ; 아래에서 Value를 바꿀 때 Change가 다시 불려도 무시되게 한다
     if (reason != "") {
         ctrl.Value := old
-        MsgBox(reason, "Focus & Draw - 단축키", "Icon!")
+        MsgBox(reason, "ClassZoom - 단축키", "Icon!")
     } else {
         hotkeyCombos[name] := combo
         ctrl.Value := combo

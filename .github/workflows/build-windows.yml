@@ -1,13 +1,13 @@
-# Windows exe 빌드 / 배포
+# ClassZoom — Windows exe 빌드 / 배포
 #
 # - main에 올릴 때마다: 문법 검사 → exe 컴파일 → zip을 "Artifacts"로 올림 (Actions 탭에서 받기)
-# - v로 시작하는 태그(예: v2.1.0)를 올리면: 위와 같이 만든 zip으로 GitHub 릴리스를 만듦
+# - v로 시작하는 태그(예: v1.0.0)를 올리면: 위와 같이 만든 zip으로 GitHub 릴리스를 만듦
 # - Actions 탭에서 "Run workflow"로 손으로 돌릴 수도 있음
 #
-# 버전 번호는 windows/focus-draw.ahk의 APP_VERSION 한 곳에서 읽는다.
-# 태그를 달 때는 태그(v2.1.0)와 APP_VERSION(2.1.0)이 같아야 한다 — 다르면 멈춘다.
+# 버전 번호는 windows/classzoom.ahk의 APP_VERSION 한 곳에서 읽는다.
+# 태그를 달 때는 태그(v1.0.0)와 APP_VERSION(1.0.0)이 같아야 한다 — 다르면 멈춘다.
 
-name: Build Windows exe
+name: Build ClassZoom exe
 
 on:
   push:
@@ -31,10 +31,10 @@ jobs:
       - name: Read version
         id: ver
         run: |
-          $m = Select-String -Path windows/focus-draw.ahk -Pattern '^APP_VERSION := "([^"]+)"' | Select-Object -First 1
+          $m = Select-String -Path windows/classzoom.ahk -Pattern '^APP_VERSION := "([^"]+)"' | Select-Object -First 1
           if (-not $m) { throw "APP_VERSION not found" }
           $v = $m.Matches[0].Groups[1].Value
-          $sv = Select-String -Path windows/focus-draw.ahk -Pattern '^;@Ahk2Exe-SetVersion (.+)$' | Select-Object -First 1
+          $sv = Select-String -Path windows/classzoom.ahk -Pattern '^;@Ahk2Exe-SetVersion (.+)$' | Select-Object -First 1
           if ($sv.Matches[0].Groups[1].Value.Trim() -ne $v) { throw "SetVersion and APP_VERSION differ" }
           if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$v") {
             throw "Tag $env:GITHUB_REF_NAME does not match APP_VERSION $v"
@@ -66,7 +66,7 @@ jobs:
       # 스크립트를 실행하지 않고 읽어 들이기만 해서 문법·#Include 오류를 잡는다
       - name: Validate script
         run: |
-          $p = Start-Process $env:AHK_EXE -ArgumentList '/ErrorStdOut=UTF-8', '/validate', 'focus-draw.ahk' `
+          $p = Start-Process $env:AHK_EXE -ArgumentList '/ErrorStdOut=UTF-8', '/validate', 'classzoom.ahk' `
             -WorkingDirectory windows -Wait -PassThru -NoNewWindow -RedirectStandardError validate.log
           Get-Content validate.log -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0) { throw "Script validation failed ($($p.ExitCode))" }
@@ -74,8 +74,8 @@ jobs:
       - name: Compile exe
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          $out = Join-Path $PWD 'dist/focus-draw.exe'
-          $p = Start-Process $env:AHK2EXE -ArgumentList '/in', 'focus-draw.ahk', '/out', "`"$out`"", '/base', "`"$env:AHK_EXE`"", '/silent', 'verbose' `
+          $out = Join-Path $PWD 'dist/classzoom.exe'
+          $p = Start-Process $env:AHK2EXE -ArgumentList '/in', 'classzoom.ahk', '/out', "`"$out`"", '/base', "`"$env:AHK_EXE`"", '/silent', 'verbose' `
             -WorkingDirectory windows -Wait -PassThru -NoNewWindow -RedirectStandardOutput compile.log
           Get-Content windows/compile.log, compile.log -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0 -or -not (Test-Path $out)) { throw "Compile failed ($($p.ExitCode))" }
@@ -85,12 +85,12 @@ jobs:
         id: pkg
         run: |
           $v = '${{ steps.ver.outputs.version }}'
-          $dir = 'dist/Focus & Draw'
+          $dir = 'dist/ClassZoom'
           New-Item -ItemType Directory -Force $dir | Out-Null
-          Move-Item dist/focus-draw.exe $dir
+          Move-Item dist/classzoom.exe $dir
           Copy-Item windows/사용안내.txt $dir
           Copy-Item LICENSE "$dir/LICENSE.txt"
-          $zip = "dist/Focus-Draw-$v-zoom.zip"
+          $zip = "dist/ClassZoom-$v.zip"
           Compress-Archive -Path $dir -DestinationPath $zip -Force
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
           "zip=$zip" >> $env:GITHUB_OUTPUT
@@ -99,7 +99,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Focus-Draw-${{ steps.ver.outputs.version }}-zoom
+          name: ClassZoom-${{ steps.ver.outputs.version }}
           path: ${{ steps.pkg.outputs.zip }}
 
       - name: Create GitHub release
@@ -108,15 +108,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $notes = @"
-          Focus & Draw $('${{ steps.ver.outputs.version }}') — 라이브 확대 추가판 (Windows 10 / 11)
+          ClassZoom $('${{ steps.ver.outputs.version }}') — 실시간 화면 확대 · 마우스 강조 · 화면 드로잉 (Windows 10 / 11)
 
-          **내려받기:** 아래 ``$(Split-Path '${{ steps.pkg.outputs.zip }}' -Leaf)``를 받아 압축을 풀고 ``focus-draw.exe``를 실행하세요.
+          **내려받기:** 아래 ``$(Split-Path '${{ steps.pkg.outputs.zip }}' -Leaf)``를 받아 압축을 풀고 ``classzoom.exe``를 실행하세요.
           파란 "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누르세요.
 
-          - F7 / 위젯 돋보기: 실시간 확대 (Ctrl+휠 배율, Esc 끄기)
+          - F7 / 위젯 돋보기: 실시간 확대 3단계 (누를 때마다 1→2→3단계→끄기, Ctrl+휠, Esc)
           - 화면 공유·녹화에 확대 화면이 그대로 보이고 커서는 하나만 보입니다
-          - 원작 maker-SSAM/focus-draw 2.0.1의 강조·드로잉 기능 모두 포함
+          - 강조·드로잉 기능은 maker-SSAM/focus-draw(MIT)를 바탕으로 했습니다
 
           SHA-256: ``${{ steps.pkg.outputs.sha }}``
           "@
-          gh release create $env:GITHUB_REF_NAME '${{ steps.pkg.outputs.zip }}' --title "Focus & Draw $env:GITHUB_REF_NAME (라이브 확대)" --notes $notes
+          gh release create $env:GITHUB_REF_NAME '${{ steps.pkg.outputs.zip }}' --title "ClassZoom $env:GITHUB_REF_NAME" --notes $notes

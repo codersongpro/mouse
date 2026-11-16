@@ -1,10 +1,11 @@
 ; ##########################################################################
-; ## 라이브 확대 (focus-draw.ahk가 #Include로 불러 쓴다)                   ##
+; ## 라이브 확대 (classzoom.ahk가 #Include로 불러 쓴다)                   ##
 ; ##########################################################################
 ;
 ; 무엇을 하나
 ;   커서가 있는 모니터를 **실시간으로** 확대해 보여준다(정지 화면 캡처가 아니다 — 영상도 움직인다).
-;   켜기/끄기: 단축키(기본 F7) 또는 위젯의 돋보기 버튼. 확대 중 Ctrl+휠 = 배율, Esc = 끄기.
+;   3단계: 단축키(기본 F7)나 위젯의 돋보기 버튼을 누를 때마다 1단계 → 2단계 → 3단계 → 끄기.
+;   확대 중 Ctrl+휠 = 단계 오르내리기, Esc = 끄기. 단계별 배율은 설정 창 "확대" 탭에서 정한다.
 ;
 ; 왜 이렇게 만들었나 — ZoomIt의 "커서 두 개" 문제
 ;   ZoomIt·Windows 돋보기는 화면 전체를 시스템 단계에서 키운다. 그러면 녹화·화면 공유 프로그램이
@@ -36,7 +37,8 @@
 ; ---------------- 조절용 숫자 ----------------
 ZOOM_MIN_PCT := 125          ; 가장 작은 배율(%)
 ZOOM_MAX_PCT := 800          ; 가장 큰 배율(%)
-ZOOM_WHEEL_RATIO := 1.25     ; Ctrl+휠 한 칸에 곱하는 배율
+ZOOM_STEP_DEFAULTS := [150, 200, 300] ; 1·2·3단계 기본 배율(%)
+ZOOM_BADGE_MS := 900         ; 단계가 바뀔 때 커서 옆에 뜨는 "2단계 · 200%" 표시 시간
 ZOOM_TICK_MS := 15           ; 확대 화면을 다시 그리는 간격 (약 60fps). 확대 중에만 돈다
 ZOOM_SMOOTH_FOLLOW := 0.45   ; 부드럽게: 한 번에 목표 위치로 다가가는 비율 (1 = 바로)
 ZOOM_SMOOTH_LEVEL := 0.30    ; 부드럽게: 한 번에 목표 배율로 다가가는 비율
@@ -57,20 +59,25 @@ zoomOX := 0.0, zoomOY := 0.0               ; 원본 영역의 왼쪽 위 (화면
 zoomML := 0, zoomMT := 0, zoomMW := 0, zoomMH := 0  ; 확대 중인 모니터
 zoomSrcL := 0, zoomSrcT := 0, zoomSrcW := 1, zoomSrcH := 1 ; 마지막으로 보여준 원본 영역
 zoomFilterKey := ""   ; 확대에서 뺀 창 목록 (바뀌었을 때만 다시 알린다)
+zoomStep := 0         ; 지금 단계 (0 = 꺼짐, 1~3)
+zoomBadge := ""       ; 단계 표시 창
+zoomBadgeText := ""
 
 ; settings.ini [Zoom] — LoadSettings()/WriteSettings()가 부른다.
 ; 이 파일은 LoadSettings()보다 위에서 #Include되므로 위 숫자들이 이미 정해져 있다.
-zoomDefaultPct := 200
+zoomSteps := ZOOM_STEP_DEFAULTS.Clone() ; 1·2·3단계 배율(%) — [Zoom] Level1·Level2·Level3
 zoomSmooth := true
 ZoomLoadSettings() {
-    global zoomDefaultPct, zoomSmooth, ZOOM_MIN_PCT, ZOOM_MAX_PCT
-    zoomDefaultPct := ReadIniNum("Zoom", "Level", ZOOM_MIN_PCT, ZOOM_MAX_PCT, 200)
+    global zoomSteps, zoomSmooth, ZOOM_MIN_PCT, ZOOM_MAX_PCT, ZOOM_STEP_DEFAULTS
+    loop 3
+        zoomSteps[A_Index] := ReadIniNum("Zoom", "Level" A_Index, ZOOM_MIN_PCT, ZOOM_MAX_PCT, ZOOM_STEP_DEFAULTS[A_Index])
     zoomSmooth := ReadIniNum("Zoom", "Smooth", 0, 1, 1) = 1
 }
 
 ZoomWriteSettings() {
-    global SETTINGS_PATH, zoomDefaultPct, zoomSmooth
-    IniWrite(zoomDefaultPct, SETTINGS_PATH, "Zoom", "Level")
+    global SETTINGS_PATH, zoomSteps, zoomSmooth
+    loop 3
+        IniWrite(zoomSteps[A_Index], SETTINGS_PATH, "Zoom", "Level" A_Index)
     IniWrite(zoomSmooth ? 1 : 0, SETTINGS_PATH, "Zoom", "Smooth")
 }
 
@@ -90,14 +97,14 @@ ZoomInit() {
         ; E0x80000 레이어드 + E0x20 클릭 통과 + E0x8000000 활성화 안 됨.
         ; 클릭 통과라 확대 중에도 클릭은 아래 프로그램(또는 판서 층)으로 그대로 간다.
         ; MouseGetPos도 이 창을 건너뛰므로 DrawPoll의 "커서 아래 창" 판정을 가리지 않는다.
-        zoomHost := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x8080020", "FocusDraw-Zoom")
+        zoomHost := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x8080020", "ClassZoom-Zoom")
         zoomHost.BackColor := "000000"
         zoomHost.Show("x0 y0 w8 h8 Hide")
         ; 레이어드 창은 투명도를 한 번 정해줘야 화면에 그려진다 (255 = 불투명, 2 = LWA_ALPHA)
         DllCall("SetLayeredWindowAttributes", "ptr", zoomHost.Hwnd, "uint", 0, "uchar", 255, "uint", 2)
         hInst := DllCall("GetModuleHandle", "ptr", 0, "ptr")
         ; WC_MAGNIFIER("Magnifier") 클래스는 MagInitialize가 등록한다. 0x50000000 = WS_CHILD | WS_VISIBLE
-        zoomMag := DllCall("CreateWindowEx", "uint", 0, "str", "Magnifier", "str", "FocusDrawMagnifier"
+        zoomMag := DllCall("CreateWindowEx", "uint", 0, "str", "Magnifier", "str", "ClassZoomMagnifier"
             , "uint", 0x50000000, "int", 0, "int", 0, "int", 8, "int", 8
             , "ptr", zoomHost.Hwnd, "ptr", 0, "ptr", hInst, "ptr", 0, "ptr")
         if !zoomMag
@@ -108,7 +115,7 @@ ZoomInit() {
     } catch as err {
         zoomFailed := true
         MsgBox("확대 기능을 시작하지 못했습니다.`n`n(" err.Message ")`n`n"
-            . "Windows 기본 돋보기(Win + +)는 계속 쓰실 수 있습니다.", "Focus & Draw — 확대", "Icon!")
+            . "Windows 기본 돋보기(Win + +)는 계속 쓰실 수 있습니다.", "ClassZoom — 확대", "Icon!")
         return false
     }
 }
@@ -121,24 +128,38 @@ ZoomShutdown(*) {
 }
 
 ; ---------------- 켜기 / 끄기 ----------------
+; 누를 때마다 1단계 → 2단계 → 3단계 → 끄기 (위젯 돋보기 버튼과 단축키가 같이 쓴다)
 ToggleZoom(*) {
-    global zoomOn
-    if zoomOn
-        ZoomStop()
+    global zoomOn, zoomStep
+    if !zoomOn
+        ZoomStart(1)
+    else if (zoomStep < 3)
+        ZoomSetStep(zoomStep + 1)
     else
-        ZoomStart()
+        ZoomStop()
 }
 
-ZoomStart() {
-    global zoomOn, zoomVisible, zoomClosing, zoomLevel, zoomTarget, zoomDefaultPct, zoomSmooth
+ZoomSetStep(n) {
+    global zoomStep, zoomTarget, zoomSteps, zoomOn
+    if !zoomOn
+        return
+    zoomStep := Max(1, Min(3, n))
+    zoomTarget := zoomSteps[zoomStep] / 100
+    ZoomShowBadge()
+}
+
+ZoomStart(step := 1) {
+    global zoomOn, zoomVisible, zoomClosing, zoomLevel, zoomTarget, zoomSteps, zoomSmooth, zoomStep
     global zoomHost, zoomOX, zoomOY, zoomML, zoomMT, zoomFilterKey
     if !ZoomInit()
         return
     zoomOn := true
+    zoomStep := step
     if zoomClosing { ; 끄는 중에 다시 켜면 그 자리에서 되돌아간다
         zoomClosing := false
+        zoomTarget := zoomSteps[step] / 100
     } else if !zoomVisible {
-        zoomTarget := zoomDefaultPct / 100
+        zoomTarget := zoomSteps[step] / 100
         MouseGetPos(&cx, &cy)
         ZoomUseMonitorAt(cx, cy)
         zoomLevel := zoomSmooth ? 1.0 : zoomTarget
@@ -154,13 +175,16 @@ ZoomStart() {
     }
     ZoomSetHotkeys(true)
     UpdateWidgetState()
+    ZoomShowBadge()
 }
 
 ZoomStop() {
-    global zoomOn, zoomVisible, zoomClosing, zoomSmooth
+    global zoomOn, zoomVisible, zoomClosing, zoomSmooth, zoomStep
     if !zoomOn
         return
     zoomOn := false
+    zoomStep := 0
+    ZoomHideBadge()
     ZoomSetHotkeys(false)
     if (zoomVisible && zoomSmooth)
         zoomClosing := true ; ZoomTick이 배율을 1까지 줄인 뒤 ZoomHide를 부른다
@@ -206,21 +230,49 @@ ZoomSetHotkeys(on) {
     HotIf() ; 다른 곳의 Hotkey() 호출이 이 조건에 묶이지 않게 되돌린다
 }
 
-; Ctrl+휠: 배율을 한 칸씩. 커서가 가리키는 지점은 그대로 둔 채 커지고 작아진다.
+; Ctrl+휠: 단계를 한 칸씩 오르내린다 (1~3단계). 커서가 가리키는 지점은 그대로 둔 채 커지고 작아진다.
 ZoomWheel(dir) {
-    global zoomTarget, zoomOn, ZOOM_WHEEL_RATIO, ZOOM_MIN_PCT, ZOOM_MAX_PCT
-    if !zoomOn
-        return
-    z := dir > 0 ? zoomTarget * ZOOM_WHEEL_RATIO : zoomTarget / ZOOM_WHEEL_RATIO
-    zoomTarget := Max(ZOOM_MIN_PCT / 100, Min(ZOOM_MAX_PCT / 100, z))
+    global zoomOn, zoomStep
+    if zoomOn
+        ZoomSetStep(zoomStep + (dir > 0 ? 1 : -1))
 }
 
-; 설정 창에서 기본 배율을 바꾸면 확대 중인 화면에도 바로 보여준다
-ZoomApplyDefaultLevel(pct) {
-    global zoomDefaultPct, zoomTarget, zoomOn
-    zoomDefaultPct := pct
-    if zoomOn
+; 설정 창에서 단계 배율을 바꾸면, 지금 그 단계로 확대 중이면 화면에도 바로 보여준다
+ZoomApplyStepLevel(i, pct) {
+    global zoomSteps, zoomTarget, zoomOn, zoomStep
+    zoomSteps[i] := pct
+    if (zoomOn && zoomStep = i)
         zoomTarget := pct / 100
+}
+
+; ---------------- 단계 표시 ("2단계 · 200%") ----------------
+; 커서 오른쪽 아래에 잠깐 띄운다. 확대하지 않는 창(ZoomTopHwnds)이라 늘 진짜 커서 옆, 원래 크기로 보인다.
+ZoomShowBadge() {
+    global zoomBadge, zoomBadgeText, zoomStep, zoomSteps, ZOOM_BADGE_MS
+    if (zoomStep < 1)
+        return
+    if !IsObject(zoomBadge) {
+        ; 0x80000 레이어드 + 0x20 클릭 통과 + 0x8000000 활성화 안 됨
+        zoomBadge := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x8080020", "ClassZoom-ZoomBadge")
+        zoomBadge.BackColor := "1E293B"
+        zoomBadge.MarginX := 14, zoomBadge.MarginY := 8
+        zoomBadge.SetFont("s13 bold cFFFFFF", "Malgun Gothic")
+        zoomBadgeText := zoomBadge.AddText("w170 Center", "")
+    }
+    zoomBadgeText.Value := "확대 " zoomStep "단계 · " zoomSteps[zoomStep] "%"
+    MouseGetPos(&mx, &my)
+    zoomBadge.Show("NA x" (mx + 26) " y" (my + 26) " AutoSize")
+    DllCall("SetLayeredWindowAttributes", "ptr", zoomBadge.Hwnd, "uint", 0, "uchar", 235, "uint", 2)
+    WinGetPos(, , &bw, &bh, zoomBadge)
+    RoundRegion(zoomBadge.Hwnd, bw, bh, 14)
+    ZoomKeepOrder(true)
+    SetTimer(ZoomHideBadge, -ZOOM_BADGE_MS)
+}
+
+ZoomHideBadge() {
+    global zoomBadge
+    if IsObject(zoomBadge)
+        zoomBadge.Hide()
 }
 
 ; ---------------- 좌표 ----------------
@@ -340,8 +392,10 @@ ZoomTick() {
 ; ---------------- 확대에서 뺄 창 / 창 순서 ----------------
 ; 확대 창 위에 그대로(확대하지 않고) 보여야 하는 우리 창들. 진짜 커서 자리에 그려지는 것들이다.
 ZoomTopHwnds() {
-    global widget, spotGui, clickAnim, stepGui
+    global widget, spotGui, clickAnim, stepGui, zoomBadge
     list := []
+    if IsObject(zoomBadge)
+        try list.Push(zoomBadge.Hwnd)
     try list.Push(spotGui.Hwnd)
     for side in ["L", "R"]
         try list.Push(clickAnim[side].gui.Hwnd)

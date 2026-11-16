@@ -173,7 +173,7 @@ Summary() {
     out .= "`n▣ 권하는 지우개 경계값`n"
     if s.ok
         out .= "  관찰된 크기 " s.lo " 과 " s.hi " 사이가 가장 넓게 비어 있습니다 (" s.gap "만큼).`n"
-            . "  => focus-draw.ahk 의  ERASER_CONTACT_PX := " s.value "  을 권합니다.`n"
+            . "  => classzoom.ahk 의  ERASER_CONTACT_PX := " s.value "  을 권합니다.`n"
             . "     (" s.lo " 이하 = 펜·손가락으로 글씨,  " s.hi " 이상 = 손날로 지우기)`n"
     else
         out .= "  크기가 뚜렷하게 갈리지 않습니다. 펜·손가락·손날을 각각 충분히 대보셨는지 확인하시고,`n"
