@@ -121,7 +121,6 @@ version.txt              설정 창의 "새 버전 확인"이 읽는 파일
 .github/workflows/       exe 자동 빌드·릴리스
 ```
 
-## 라이선스와 출처
+## 라이선스
 
 MIT License — `LICENSE` 파일 참고.
-마우스 강조·드로잉 기능은 [maker-SSAM/focus-draw](https://github.com/maker-SSAM/focus-draw) (Focus & Draw, MIT, © 2026 maker_SSAM)를 바탕으로 했습니다.

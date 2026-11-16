@@ -28,7 +28,7 @@ APP_VERSION := "1.0.1"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
-; ClassZoom은 codersongpro/mouse 저장소에서 배포한다(원작 Focus & Draw와 별개의 프로그램).
+; ClassZoom은 codersongpro/mouse 저장소에서 배포한다.
 UPDATE_FILE_URL := "https://raw.githubusercontent.com/codersongpro/mouse/main/version.txt"
 RELEASES_URL := "https://github.com/codersongpro/mouse/releases/latest"
 AUTHOR_URL := "https://github.com/codersongpro/mouse" ; 설정 창의 홈페이지 링크
@@ -4070,7 +4070,7 @@ OpenSettingsWindow(*) {
     ; 제작자 표시도 같이 둔다 — 수업 화면을 가리지 않으면서 찾으려는 사람은 확실히 볼 수 있는
     ; 자리가 여기라서, 위젯이나 트레이 툴팁 대신 이곳을 골랐다. 탭 아래 가운데에 둔다.
     ; +0x80 = SS_NOPREFIX. 이게 없으면 Text 컨트롤이 &를 단축키 표시용 기호로 삼아 먹어버려서
-    ; "Focus & Draw"가 "Focus  Draw"로 나온다 (뒤 글자에 밑줄만 그어진다).
+    ; "A & B"가 "A  B"로 나온다 (뒤 글자에 밑줄만 그어진다).
     lblVersion := settingsGui.AddText("x22 y500 w436 Center +0x80", "ClassZoom 버전 " APP_VERSION)
     lblVersion.SetFont("s9 c999999")
     ; 제작자 이름을 누르면 개인페이지가 열린다 (링크처럼 보이게 파란 밑줄 글씨)
