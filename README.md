@@ -34,13 +34,37 @@ ZoomIt·Windows 돋보기는 화면 전체를 시스템 단계에서 키웁니�
 - Zoom·Meet에서 **"화면 전체"(모니터)**를 공유하세요. **특정 창만** 공유하면 확대 창이 공유에 포함되지 않습니다.
 - 모니터가 두 대면 확대는 **커서가 있는 모니터**에서 동작합니다. 공유 중인 모니터에서 켜세요.
 
-## 실행 방법
+## 내려받기 (exe, 설치 없음)
+
+1. [Releases](https://github.com/codersongpro/mouse/releases/latest)에서 `Focus-Draw-버전-zoom.zip`을 받습니다.
+2. 바탕화면이나 문서 폴더에 압축을 풀고 `focus-draw.exe`를 실행합니다.
+3. 파란 "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누릅니다 (전자서명이 없는 개인 제작 프로그램에 늘 뜨는 안내입니다).
+
+zip 안에는 `focus-draw.exe`, `사용안내.txt`, `LICENSE.txt`가 들어 있습니다. AutoHotkey를 설치할 필요가 없습니다.
+
+## 소스로 실행
 
 1. [AutoHotkey v2](https://www.autohotkey.com/)를 설치합니다.
 2. 이 저장소를 내려받아 **폴더 구조 그대로** 둡니다 (`windows/`와 `shared/`가 나란히 있어야 합니다).
 3. `windows\focus-draw.ahk`를 더블클릭합니다.
 
-exe로 만들려면 AutoHotkey의 **Ahk2Exe**로 `windows\focus-draw.ahk`를 컴파일하세요. `zoom.ahk`와 아이콘이 exe 안에 함께 들어갑니다.
+## 새 버전 배포하기 (관리자용)
+
+exe는 GitHub Actions(`.github/workflows/build-windows.yml`)가 Windows 서버에서 자동으로 만듭니다.
+
+- **main에 올릴 때마다**: 문법 검사 → exe 컴파일 → zip 생성. Actions 탭의 실행 기록 맨 아래 **Artifacts**에서 받아 시험해 볼 수 있습니다.
+- **릴리스 내기**:
+  1. `windows/focus-draw.ahk`에서 `;@Ahk2Exe-SetVersion`과 `APP_VERSION`을 같은 번호로 올립니다 (예: `2.1.1`).
+  2. `version.txt`의 `windows=`도 같은 번호로 고칩니다 (설정 창의 "새 버전 확인"이 이 값을 봅니다).
+  3. main에 올린 뒤 `v2.1.1` 태그를 올리면 Releases에 zip이 자동으로 게시됩니다. 태그와 `APP_VERSION`이 다르면 빌드가 멈춥니다.
+
+```bash
+git tag v2.1.1
+```
+
+```bash
+git push origin v2.1.1
+```
 
 ## 원작 기능 (그대로 유지)
 
@@ -54,7 +78,7 @@ exe로 만들려면 AutoHotkey의 **Ahk2Exe**로 `windows\focus-draw.ahk`를 컴
 
 ## 처음 써 보실 때 확인할 것
 
-이 판은 Windows가 아닌 환경에서 작성되어 **아직 실제 PC에서 실행해 보지 않았습니다.** 아래를 한 번 확인해 주세요.
+이 판은 Windows가 아닌 환경에서 작성되었습니다. 문법 검사와 exe 컴파일은 GitHub Actions(Windows)에서 통과했지만, **실제 PC에서 화면을 띄워 보지는 않았습니다.** 아래를 한 번 확인해 주세요.
 
 - [ ] `F7`로 확대가 켜지고 꺼진다. 위젯 돋보기 버튼도 같다
 - [ ] 유튜브 영상을 띄우고 확대해도 영상이 계속 움직인다
@@ -79,6 +103,7 @@ windows/focus-draw.ahk   원작 Windows 판 + 확대 연결
 windows/zoom.ahk         라이브 확대 (새로 추가)
 shared/                  아이콘 (icon_zoom*.png 새로 추가)
 version.txt              설정 창의 "새 버전 확인"이 읽는 파일
+.github/workflows/       exe 자동 빌드·릴리스
 ```
 
 ## 라이선스
