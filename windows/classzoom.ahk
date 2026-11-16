@@ -9,7 +9,7 @@
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
 ;@Ahk2Exe-SetDescription ClassZoom - 실시간 화면 확대 / 마우스 강조 / 화면 드로잉
-;@Ahk2Exe-SetVersion 1.0.2
+;@Ahk2Exe-SetVersion 1.0.3
 ;@Ahk2Exe-SetCopyright ClassZoom (c) 2026 codersongpro. MIT License
 
 Persistent()
@@ -24,7 +24,7 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.0.2"
+APP_VERSION := "1.0.3"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
@@ -1525,6 +1525,7 @@ ShowStepNumber(step) {
     if !DrawStepBadge(step, badgeW)
         return
     MouseGetPos(&mx, &my)
+    ZoomScreenPos(&mx, &my) ; 확대 중이면 확대 화면 속 커서 옆에 (zoom.ahk)
     ; **커서 중심에서 늘 같은 거리**에 둔다. 예전에는 커서 원 가장자리에 붙여서, 굵기를 바꿀
     ; 때마다 숫자가 조금씩 움직여 눈이 따라가야 했다.
     x := mx + STEP_BADGE_GAP, y := my + STEP_BADGE_GAP
@@ -1594,7 +1595,7 @@ SetBrushMode(mode) {
 ; 겉으로는 화살표가 떠 있는데 기록은 "오버레이 위"라서, 오버레이로 돌아가도 아무 일도 하지
 ; 않는 상태로 굳었다. 원이 떠 있는지를 그대로 물어보면 어긋날 수가 없다.
 UpdateDrawCursorForWindow(winUnder) {
-    global drawOn, drawGui, brushGui
+    global drawOn, drawGui, brushGui, zoomVisible
     if !drawOn
         return
     wantCircle := (winUnder = drawGui.Hwnd) ; 오버레이 위에서만 원을 쓴다
@@ -1606,7 +1607,10 @@ UpdateDrawCursorForWindow(winUnder) {
         brushGui.Show("NA")       ; 원을 도로 띄운다
         ZoomKeepOrder()           ; 확대 중이면 원이 확대 화면 아래(확대되는 쪽)로 가게 (zoom.ahk)
     } else {
-        RestoreSystemCursor()     ; 위젯·캡처 도구 위에서는 평소 화살표를 돌려준다
+        ; 위젯·캡처 도구 위에서는 평소 화살표를 돌려준다. 확대 중이면 진짜 커서 대신
+        ; 확대 화면 위에 그린 화살표가 나온다(zoom.ahk ZoomUpdateCursor) — 커서가 둘이 되지 않게.
+        if !zoomVisible
+            RestoreSystemCursor()
         brushGui.Hide()
     }
 }
@@ -1659,10 +1663,9 @@ MoveBrushCursor(px := "", py := "") {
     global drawOn, brushGui, brushCanvas, brushPad, brushMode
     if (!drawOn || !IsObject(brushCanvas) || !brushCanvas.graphics)
         return
-    if (px = "" || py = "") {
+    if (px = "" || py = "")
         MouseGetPos(&mx, &my)
-        ZoomMapPoint(&mx, &my) ; 확대 중이면 그 자리에 보이는 내용의 실제 좌표로 (zoom.ahk)
-    } else
+    else
         mx := px, my := py
     ; 펜의 투명도는 원을 그릴 때 이미 색에 담겨 있다(ActiveARGB). 지우개 테두리는 안내선이라 또렷하게 둔다.
     PushCanvasToWindow(brushGui.Hwnd, brushCanvas, mx - brushPad, my - brushPad, 255)
@@ -2784,9 +2787,6 @@ DrawPoll() {
     if !drawOn
         return
     MouseGetPos(&mx, &my, &winUnder)
-    ; 확대 중이면 진짜 커서 자리를 "그 자리에 보이는 내용이 실제로 있는 곳"으로 바꿔 긋는다.
-    ; 창 판정(winUnder)은 진짜 자리 그대로 쓴다. (zoom.ahk)
-    ZoomMapPoint(&mx, &my)
     ; 판서 오버레이 위에 다른 창이 올라와 있으면(캡처 도구, 위젯 등) 진짜 마우스 커서를
     ; 돌려준다. 안 그러면 그 창 위에서 커서가 아예 안 보인다 — 판서 중에는 진짜 커서를
     ; 완전히 감추고 우리가 그리는 원으로 대신하는데, 그 원은 저 창들 아래에 깔리기 때문이다.
@@ -3010,6 +3010,7 @@ SpotFollow() {
     if !spotlightOn
         return
     MouseGetPos(&mx, &my)
+    ZoomScreenPos(&mx, &my) ; 확대 중이면 확대 화면 속 커서 자리에 (zoom.ahk)
     WinMove(mx - SpotSize // 2, my - SpotSize // 2,,, spotGui)
 }
 
@@ -3063,6 +3064,7 @@ ClickAnimStepFor(side) {
         return
     }
     MouseGetPos(&mx, &my)
+    ZoomScreenPos(&mx, &my) ; 확대 중이면 확대 화면 속 커서 자리에 (zoom.ahk)
     if a.canvas.graphics {
         DllCall("gdiplus\GdipGraphicsClear", "ptr", a.canvas.graphics, "uint", 0x00000000)
 
@@ -3198,8 +3200,9 @@ OnExit(RestoreSystemCursor) ; 커서가 숨겨진 채로 프로그램이 종료�
 ; 판단한다. 판서 중에는 그어질 선을 보여주는 원(brushGui)이 커서 노릇을 하므로 진짜 커서는
 ; 완전히 감추고("blank"), 강조 중 커서 숨기기는 예전처럼 작은 십자선("cross")을 쓴다.
 UpdateCursorHiddenState() {
-    global spotlightOn, hideCursorOnHighlight, drawOn, systemCursorHidden, currentCursorKind
-    kind := drawOn ? "blank" : ((spotlightOn && hideCursorOnHighlight) ? "cross" : "")
+    global spotlightOn, hideCursorOnHighlight, drawOn, systemCursorHidden, currentCursorKind, zoomVisible
+    ; 확대 중에도 진짜 커서는 감춘다 — 확대 화면 위에 그린 커서 하나만 보이게 (zoom.ahk)
+    kind := (drawOn || zoomVisible) ? "blank" : ((spotlightOn && hideCursorOnHighlight) ? "cross" : "")
     if (kind = "") {
         if systemCursorHidden
             RestoreSystemCursor()
@@ -4014,8 +4017,8 @@ OpenSettingsWindow(*) {
         , "• F7 또는 위젯의 돋보기 버튼을 누를 때마다: 1단계 → 2단계 → 3단계 → 끄기`n"
         . "• 확대 중 Ctrl + 마우스 휠: 단계 올리기·내리기   /   Esc: 확대 끄기`n`n"
         . "• 화면을 캡처한 그림이 아니라 실시간 화면입니다. 영상도 그대로 움직입니다.`n"
-        . "• 마우스를 움직이면 화면이 따라가고, 커서가 가리키는 곳이 그대로 클릭됩니다.`n"
-        . "• 드로잉(F9)을 켜면 화면이 고정됩니다. 커서를 화면 가장자리로 밀면 그쪽으로 이동합니다.`n`n"
+        . "• 확대 화면은 고정되고 커서만 움직입니다. 커서를 가장자리 쪽으로 가져가면 그쪽으로 이동합니다.`n"
+        . "• 커서가 가리키는 곳이 그대로 클릭되고, 확대한 채로 그릴 수도 있습니다(F9).`n`n"
         . "• Zoom·Google Meet 화면 공유와 녹화에 확대 화면이 그대로 보이고, 마우스 커서는 하나만 보입니다.`n"
         . "  공유할 때는 '창'이 아니라 '화면 전체'를 고르세요.")
     lblZoomHelp.SetFont("s9 c555555")

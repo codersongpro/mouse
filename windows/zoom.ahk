@@ -14,24 +14,26 @@
 ;   여기서는 화면 맨 위에 **보통 창 하나(zoomHost)**를 띄우고, 그 안의 Magnification API 확대
 ;   컨트롤이 아래 화면을 키워 그린다.
 ;     - 일반 창이라 Zoom·Google Meet 화면 공유와 녹화에 **그대로 찍힌다.**
-;     - 확대 컨트롤은 커서를 그리지 않는다(MS_SHOWMAGNIFIEDCURSOR를 안 줌). 보이는 커서는
-;       진짜 커서 하나뿐이다.
-;     - **커서 기준 확대**: 원본 좌표 s = 원점 + (커서 - 모니터 왼쪽 위) / 배율 에서 원점을
-;       커서(1 - 1/배율)로 잡으면, 커서가 가리키는 지점이 확대 후에도 **같은 자리**에 온다.
-;       그래서 진짜 커서와 확대된 내용이 정확히 겹치고, **확대한 채로 클릭해도 정확히 맞는다.**
+;     - 확대 컨트롤은 커서를 그리지 않는다(MS_SHOWMAGNIFIEDCURSOR를 안 줌).
+;     - **화면은 고정, 커서만 움직인다.** 확대 중에는 진짜 커서를 투명하게 숨기고(SetSystemCursor),
+;       확대 화면 위에 우리가 그린 화살표 커서(zoomCursorGui) 하나만 보인다. 그래서 녹화·공유에도
+;       커서가 하나만 찍힌다.
+;     - 진짜 커서 자리(c)는 늘 "확대 화면에서 그 커서가 가리키는 내용"의 실제 자리다. 그래서 클릭은
+;       보이는 곳에 정확히 떨어지고, 판서도 좌표를 바꿀 필요 없이 c에 그으면 된다.
+;     - 화면은 커서가 가장자리 쪽(ZOOM_EDGE_FRAC)으로 갈 때만 그쪽으로 이동한다. 예전처럼 커서를
+;       움직일 때마다 화면 전체가 따라 미끄러지지 않으므로 흔들려 보이지 않는다.
 ;     - 화면을 읽는 방식(Windows.Graphics.Capture)이 아니라서 Windows 11의 노란 캡처 테두리도
 ;       생기지 않는다.
 ;
 ; 드로잉과 함께 쓰기
-;   드로잉을 켜면 화면이 **고정**된다(커서를 따라 움직이면 긋는 동안 그림이 미끄러진다).
-;   고정된 동안 마우스·펜 좌표를 ZoomMapPoint로 원본 좌표로 바꿔 그리므로, 확대된 화면 위의
-;   보이는 자리에 정확히 그려진다. 커서를 화면 가장자리로 밀면 그쪽으로 화면이 움직인다.
-;   그린 내용은 원본 좌표에 남으므로 확대를 끄면 원래 크기로 그 자리에 있다.
+;   그린 내용은 원본 화면 좌표에 남는다. 확대 중 그리다가 가장자리로 가서 화면이 움직여도 선은
+;   내용에 붙어 있고, 확대를 끄면 원래 크기로 그 자리에 있다. 터치·펜은 손가락이 닿은 화면 자리를
+;   원본 좌표로 바꿔 긋는다(ZoomMapPt).
 ;
 ; 창 순서(위 → 아래)
-;   위젯·강조 원·클릭 링·단계 숫자   ← 확대하지 않고 진짜 커서 자리에 그대로 보인다
+;   그린 커서·강조 원·클릭 링·단계 숫자·단계 표시  ← 확대하지 않고, 확대 화면 속 커서 자리에 그린다
 ;   zoomHost (확대 화면, 클릭 통과)
-;   판서·레이저·칠판·드로잉 커서 원   ← 확대되어 보인다 (원본 좌표에 있다)
+;   위젯·판서·레이저·칠판·드로잉 커서 원·안내 창 ← 확대되어 보인다 (보이는 자리 그대로 누를 수 있다)
 ;   일반 프로그램들
 
 ; ---------------- 조절용 숫자 ----------------
@@ -41,8 +43,7 @@ ZOOM_STEP_DEFAULTS := [150, 200, 300] ; 1·2·3단계 기본 배율(%)
 ZOOM_BADGE_MS := 900         ; 단계가 바뀔 때 커서 옆에 뜨는 "2단계 · 200%" 표시 시간
 ZOOM_TICK_MS := 15           ; 확대 화면을 다시 그리는 간격 (약 60fps). 확대 중에만 돈다
 ZOOM_ANIM_MS := 220          ; 부드럽게: 단계가 바뀔 때 확대·축소에 걸리는 시간 (점점 느려지며 멈춤)
-ZOOM_EDGE_PX := 3            ; 드로잉 중(고정) 화면 가장자리에서 이만큼 안이면 그쪽으로 이동
-ZOOM_EDGE_SPEED := 24        ; 가장자리 이동 속도 (화면 픽셀/틱)
+ZOOM_EDGE_FRAC := 0.15       ; 커서가 확대 화면 가장자리에서 이 비율 안으로 들어오면 그쪽으로 화면을 옮긴다
 
 ; ---------------- 상태 ----------------
 zoomOn := false       ; 사용자가 확대를 켜 둔 상태인가
@@ -63,6 +64,8 @@ zoomAnimFrom := 1.0, zoomAnimTo := 1.0, zoomAnimT0 := 0 ; 배율 애니메이션
 zoomStep := 0         ; 지금 단계 (0 = 꺼짐, 1~3)
 zoomBadge := ""       ; 단계 표시 창
 zoomBadgeText := ""
+zoomBadgeUntil := 0   ; 단계 표시를 감출 시각 (ZoomTick도 확인해서 확실히 감춘다)
+zoomCursorGui := "", zoomCursorCanvas := "", zoomCursorPad := 0 ; 확대 중 그리는 화살표 커서
 
 ; settings.ini [Zoom] — LoadSettings()/WriteSettings()가 부른다.
 ; 이 파일은 LoadSettings()보다 위에서 #Include되므로 위 숫자들이 이미 정해져 있다.
@@ -170,6 +173,7 @@ ZoomStart(step := 1) {
         ZoomTick()           ; 첫 화면을 먼저 그려두고
         zoomHost.Show("NA")  ; 그다음 보여야 옛 화면이 번쩍이지 않는다
         zoomVisible := true
+        UpdateCursorHiddenState() ; 진짜 커서를 숨기고 그린 커서 하나만 보이게 한다
         ZoomKeepOrder(true)
         SetTimer(ZoomTick, ZOOM_TICK_MS)
     }
@@ -194,12 +198,16 @@ ZoomStop() {
 }
 
 ZoomHide() {
-    global zoomVisible, zoomClosing, zoomLevel, zoomHost
+    global zoomVisible, zoomClosing, zoomLevel, zoomHost, zoomCursorGui
     SetTimer(ZoomTick, 0)
     try zoomHost.Hide()
+    if IsObject(zoomCursorGui)
+        zoomCursorGui.Hide()
+    ZoomHideBadge()
     zoomVisible := false
     zoomClosing := false
     zoomLevel := 1.0
+    UpdateCursorHiddenState() ; 숨겨 둔 진짜 커서를 돌려준다
     RaiseWidget()
 }
 
@@ -248,7 +256,7 @@ ZoomApplyStepLevel(i, pct) {
 ; ---------------- 단계 표시 ("2단계 · 200%") ----------------
 ; 커서 오른쪽 아래에 잠깐 띄운다. 확대하지 않는 창(ZoomTopHwnds)이라 늘 진짜 커서 옆, 원래 크기로 보인다.
 ZoomShowBadge() {
-    global zoomBadge, zoomBadgeText, zoomStep, zoomSteps, ZOOM_BADGE_MS
+    global zoomBadge, zoomBadgeText, zoomBadgeUntil, zoomStep, zoomSteps, ZOOM_BADGE_MS
     if (zoomStep < 1)
         return
     if !IsObject(zoomBadge) {
@@ -261,36 +269,47 @@ ZoomShowBadge() {
     }
     zoomBadgeText.Value := "확대 " zoomStep "단계 · " zoomSteps[zoomStep] "%"
     MouseGetPos(&mx, &my)
+    ZoomScreenPos(&mx, &my) ; 확대 화면 속 커서 옆에
     zoomBadge.Show("NA x" (mx + 26) " y" (my + 26) " AutoSize")
     DllCall("SetLayeredWindowAttributes", "ptr", zoomBadge.Hwnd, "uint", 0, "uchar", 235, "uint", 2)
     WinGetPos(, , &bw, &bh, zoomBadge)
     RoundRegion(zoomBadge.Hwnd, bw, bh, 14)
+    ZoomUpdateFilter() ; 새로 만든 창이면 바로 확대 대상에서 뺀다 (확대된 사본이 남지 않게)
     ZoomKeepOrder(true)
+    ; 연속으로 누를 때마다 시계를 새로 건다. 타이머가 밀려도 ZoomTick이 zoomBadgeUntil을 보고 감춘다.
+    zoomBadgeUntil := A_TickCount + ZOOM_BADGE_MS
     SetTimer(ZoomHideBadge, -ZOOM_BADGE_MS)
 }
 
 ZoomHideBadge() {
-    global zoomBadge
+    global zoomBadge, zoomBadgeUntil
+    zoomBadgeUntil := 0
+    SetTimer(ZoomHideBadge, 0)
     if IsObject(zoomBadge)
-        zoomBadge.Hide()
+        try zoomBadge.Hide()
 }
 
 ; ---------------- 좌표 ----------------
-; 화면 좌표(진짜 커서 자리) → 원본 좌표(그 자리에 보이는 내용이 실제로 있는 곳).
-; 확대가 꺼져 있으면 그대로 둔다. 판서·지우개·드로잉 커서 원이 이 좌표를 쓴다.
-ZoomMapPoint(&x, &y) {
+; 터치·펜이 닿은 화면 자리 → 그 자리에 보이는 내용의 실제 좌표. 확대가 꺼져 있으면 그대로.
+; (마우스는 바꿀 필요가 없다 — 진짜 커서 자리가 곧 실제 좌표다)
+ZoomMapPt(pt) {
+    global zoomVisible, zoomML, zoomMT, zoomMW, zoomMH, zoomSrcL, zoomSrcT, zoomSrcW, zoomSrcH
+    if !zoomVisible
+        return pt
+    return [Round(zoomSrcL + (pt[1] - zoomML) * zoomSrcW / zoomMW)
+        , Round(zoomSrcT + (pt[2] - zoomMT) * zoomSrcH / zoomMH)]
+}
+
+; 실제 자리(진짜 커서·원본 좌표) → 확대 화면에서 보이는 자리. 확대가 꺼져 있으면 그대로.
+; 그린 커서·강조 원·클릭 링·단계 숫자가 이 자리에 그려진다.
+ZoomScreenPos(&x, &y) {
     global zoomVisible, zoomML, zoomMT, zoomMW, zoomMH, zoomSrcL, zoomSrcT, zoomSrcW, zoomSrcH
     if !zoomVisible
         return
-    x := Round(zoomSrcL + (x - zoomML) * zoomSrcW / zoomMW)
-    y := Round(zoomSrcT + (y - zoomMT) * zoomSrcH / zoomMH)
+    x := Round(zoomML + (x - zoomSrcL) * zoomMW / zoomSrcW)
+    y := Round(zoomMT + (y - zoomSrcT) * zoomMH / zoomSrcH)
 }
 
-ZoomMapPt(pt) {
-    x := pt[1], y := pt[2]
-    ZoomMapPoint(&x, &y)
-    return [x, y]
-}
 
 ; 커서가 있는 모니터로 확대 창을 옮긴다
 ZoomUseMonitorAt(x, y) {
@@ -310,18 +329,14 @@ ZoomUseMonitorAt(x, y) {
 ZoomTick() {
     global zoomOn, zoomClosing, zoomLevel, zoomTarget, zoomSmooth, zoomOX, zoomOY, zoomLastKey
     global zoomML, zoomMT, zoomMW, zoomMH, zoomSrcL, zoomSrcT, zoomSrcW, zoomSrcH, zoomMag
-    global zoomAnimFrom, zoomAnimTo, zoomAnimT0, ZOOM_ANIM_MS
-    global drawOn, penStroke, ZOOM_EDGE_PX, ZOOM_EDGE_SPEED
+    global zoomAnimFrom, zoomAnimTo, zoomAnimT0, zoomBadgeUntil, ZOOM_ANIM_MS, ZOOM_EDGE_FRAC
     MouseGetPos(&cx, &cy)
-    frozen := drawOn ; 드로잉 중에는 화면을 고정한다
 
-    ; 따라가는 중에 커서가 다른 모니터로 넘어가면 확대 창도 따라간다
-    if (!frozen && (cx < zoomML || cy < zoomMT || cx >= zoomML + zoomMW || cy >= zoomMT + zoomMH))
+    ; 커서가 다른 모니터로 넘어가면 확대 창도 따라간다
+    if (cx < zoomML || cy < zoomMT || cx >= zoomML + zoomMW || cy >= zoomMT + zoomMH)
         ZoomUseMonitorAt(cx, cy)
 
     ; ---- 배율: 시간 기준 애니메이션 (끝으로 갈수록 느려지는 ease-out) ----
-    ; 예전에는 매 프레임 "남은 거리의 일정 비율"만큼 다가갔는데, 프레임 간격이 들쭉날쭉하면
-    ; 속도도 들쭉날쭉해져 출렁여 보였다. 시작 시각을 기준으로 계산하면 늘 같은 곡선을 탄다.
     target := zoomClosing ? 1.0 : zoomTarget
     if (target != zoomAnimTo)
         zoomAnimFrom := zoomLevel, zoomAnimTo := target, zoomAnimT0 := A_TickCount
@@ -337,36 +352,25 @@ ZoomTick() {
         return
     }
 
-    ; ---- 원본 영역 크기: 가로를 정수로 정하고, 세로는 **같은 배율**에서 나오게 한다 ----
-    ; 가로·세로 배율을 따로 반올림하면 프레임마다 비율이 미세하게 달라져 화면이 일렁인다.
+    ; ---- 원본 영역 크기: 가로를 정수로, 세로는 같은 배율에서 ----
     srcW := Max(1, Round(zoomMW / z))
     srcH := Max(1, Min(zoomMH, Round(zoomMH * srcW / zoomMW)))
-    rx := cx - zoomML, ry := cy - zoomMT
 
-    if frozen {
-        ; 크기가 바뀌어도 커서 아래 지점은 그대로 둔다 (직전 화면의 실제 영역 기준)
-        if (srcW != zoomSrcW || srcH != zoomSrcH) {
-            sx := zoomOX + rx * zoomSrcW / zoomMW, sy := zoomOY + ry * zoomSrcH / zoomMH
-            zoomOX := sx - rx * srcW / zoomMW, zoomOY := sy - ry * srcH / zoomMH
-        }
-        ; 버튼을 누르지 않은 채 가장자리로 밀면 그쪽으로 이동한다 (긋는 중에는 움직이지 않는다)
-        if (!penStroke && !GetKeyState("LButton", "P") && !GetKeyState("RButton", "P")) {
-            step := ZOOM_EDGE_SPEED * srcW / zoomMW
-            if (cx <= zoomML + ZOOM_EDGE_PX)
-                zoomOX -= step
-            else if (cx >= zoomML + zoomMW - 1 - ZOOM_EDGE_PX)
-                zoomOX += step
-            if (cy <= zoomMT + ZOOM_EDGE_PX)
-                zoomOY -= step
-            else if (cy >= zoomMT + zoomMH - 1 - ZOOM_EDGE_PX)
-                zoomOY += step
-        }
-    } else {
-        ; 커서 기준: 커서가 가리키는 지점이 확대 후에도 같은 자리에 오도록.
-        ; **실제로 쓸 정수 크기(srcW·srcH)로 바로 계산**해 위치와 크기가 서로 어긋나 떨리지 않게 한다.
-        zoomOX := zoomML + rx * (1 - srcW / zoomMW)
-        zoomOY := zoomMT + ry * (1 - srcH / zoomMH)
+    ; 배율이 바뀌는 동안에는 "화면에 보이는 커서 자리"를 그대로 둔 채 커지고 작아진다
+    if (srcW != zoomSrcW || srcH != zoomSrcH) {
+        sx := (cx - zoomOX) * zoomMW / zoomSrcW, sy := (cy - zoomOY) * zoomMH / zoomSrcH
+        zoomOX := cx - sx * srcW / zoomMW, zoomOY := cy - sy * srcH / zoomMH
     }
+    ; ---- 화면 고정: 커서가 가장자리 쪽으로 갈 때만 그쪽으로 옮긴다 ----
+    ex := srcW * ZOOM_EDGE_FRAC, ey := srcH * ZOOM_EDGE_FRAC
+    if (cx < zoomOX + ex)
+        zoomOX := cx - ex
+    else if (cx > zoomOX + srcW - ex)
+        zoomOX := cx + ex - srcW
+    if (cy < zoomOY + ey)
+        zoomOY := cy - ey
+    else if (cy > zoomOY + srcH - ey)
+        zoomOY := cy + ey - srcH
     zoomOX := Max(zoomML, Min(zoomML + zoomMW - srcW, zoomOX))
     zoomOY := Max(zoomMT, Min(zoomMT + zoomMH - srcH, zoomOY))
     l := Round(zoomOX), t := Round(zoomOY)
@@ -388,10 +392,12 @@ ZoomTick() {
         zoomLastKey := key
     }
     zoomSrcL := l, zoomSrcT := t, zoomSrcW := srcW, zoomSrcH := srcH
-    ; 화면 내용(영상 등)은 계속 바뀌므로 매 프레임 다시 그리게 한다.
-    ; **배경 지우기는 하지 않는다(마지막 인자 false)** — 지우면 매 프레임 검게 번쩍여 흔들려 보였다.
+    ; 화면 내용(영상 등)은 계속 바뀌므로 매 프레임 다시 그리게 한다. 배경 지우기는 하지 않는다(false).
     DllCall("InvalidateRect", "ptr", zoomMag, "ptr", 0, "int", false)
 
+    ZoomUpdateCursor(cx, cy)
+    if (zoomBadgeUntil && A_TickCount >= zoomBadgeUntil)
+        ZoomHideBadge()
     ZoomUpdateFilter()
     ZoomKeepOrder()
 }
@@ -399,7 +405,7 @@ ZoomTick() {
 ; ---------------- 확대에서 뺄 창 / 창 순서 ----------------
 ; 확대 창 위에 그대로(확대하지 않고) 보여야 하는 우리 창들. 진짜 커서 자리에 그려지는 것들이다.
 ZoomTopHwnds() {
-    global widget, spotGui, clickAnim, stepGui, zoomBadge
+    global spotGui, clickAnim, stepGui, zoomBadge, zoomCursorGui
     list := []
     if IsObject(zoomBadge)
         try list.Push(zoomBadge.Hwnd)
@@ -407,17 +413,19 @@ ZoomTopHwnds() {
     for side in ["L", "R"]
         try list.Push(clickAnim[side].gui.Hwnd)
     try list.Push(stepGui.Hwnd)
-    if (IsSet(widget) && widget)
-        try list.Push(widget.Hwnd)
+    if IsObject(zoomCursorGui)
+        try list.Push(zoomCursorGui.Hwnd) ; 맨 위 — 다른 것에 가려지지 않게 마지막에 올린다
     return list
 }
 
 ; 확대 화면 안에 들어가야 하는 우리 창들 (확대 창보다 아래에 있어야 한다)
 ZoomBelowHwnds() {
-    global drawGui, laserGui, boardGui, brushGui
+    global drawGui, laserGui, boardGui, brushGui, widget
     m := Map()
     for g in [drawGui, laserGui, boardGui, brushGui]
         try m[g.Hwnd] := true
+    if (IsSet(widget) && widget) ; 위젯도 확대 화면 안에 — 보이는 자리 그대로 누를 수 있게
+        try m[widget.Hwnd] := true
     return m
 }
 
@@ -447,14 +455,24 @@ ZoomKeepOrder(force := false) {
     if !zoomVisible && !force
         return
     if !force {
+        ; 확대 창 위에 "확대돼야 할 우리 창"(판서 층·위젯·안내 창 등)이 올라와 있으면 순서를 다시 맞춘다.
+        ; 다른 프로그램 창은 건드리지 않는다 (작업표시줄 등과 다투지 않게).
         below := ZoomBelowHwnds()
+        top := Map()
+        for h in ZoomTopHwnds()
+            top[h] := true
+        myPid := DllCall("GetCurrentProcessId", "uint")
         h := zoomHost.Hwnd
         bad := false
         loop 64 {
             h := DllCall("GetWindow", "ptr", h, "uint", 3, "ptr") ; GW_HWNDPREV = 바로 위 창
             if !h
                 break
-            if below.Has(h) {
+            if (top.Has(h) || !DllCall("IsWindowVisible", "ptr", h)) ; 숨은 창은 순서가 상관없다
+                continue
+            pid := 0
+            DllCall("GetWindowThreadProcessId", "ptr", h, "uint*", &pid)
+            if (below.Has(h) || pid = myPid) {
                 bad := true
                 break
             }
@@ -466,4 +484,54 @@ ZoomKeepOrder(force := false) {
     DllCall("SetWindowPos", "ptr", zoomHost.Hwnd, "ptr", -1, "int", 0, "int", 0, "int", 0, "int", 0, "uint", flags)
     for h in ZoomTopHwnds()
         DllCall("SetWindowPos", "ptr", h, "ptr", -1, "int", 0, "int", 0, "int", 0, "int", 0, "uint", flags)
+}
+
+; ---------------- 확대 중 그리는 화살표 커서 ----------------
+; 진짜 커서는 숨겨 두고(UpdateCursorHiddenState), 확대 화면 속 커서 자리에 이 화살표를 그린다.
+; 드로잉 중 판서 층 위에서는 드로잉 커서 원이 커서 노릇을 하므로 감춘다.
+ZoomCursorInit() {
+    global zoomCursorGui, zoomCursorCanvas, zoomCursorPad
+    k := A_ScreenDPI / 96
+    size := Round(34 * k)
+    zoomCursorPad := Round(3 * k)
+    zoomCursorGui := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x8080020", "ClassZoom-Cursor")
+    zoomCursorGui.Show("w" size " h" size " Hide")
+    c := CreateAlphaCanvas(size, size)
+    zoomCursorCanvas := c
+    if !c.graphics
+        return
+    DllCall("gdiplus\GdipGraphicsClear", "ptr", c.graphics, "uint", 0)
+    shape := [[0, 0], [0, 1.0], [0.27, 0.76], [0.46, 1.16], [0.62, 1.08], [0.44, 0.69], [0.78, 0.69]]
+    s := 24 * k, p := zoomCursorPad
+    pts := Buffer(8 * shape.Length, 0)
+    for i, q in shape
+        NumPut("float", p + q[1] * s, "float", p + q[2] * s, pts, (i - 1) * 8)
+    brush := 0, pen := 0
+    DllCall("gdiplus\GdipCreateSolidFill", "uint", 0xFFFFFFFF, "ptr*", &brush)
+    DllCall("gdiplus\GdipFillPolygon", "ptr", c.graphics, "ptr", brush, "ptr", pts, "int", shape.Length, "int", 0)
+    DllCall("gdiplus\GdipCreatePen1", "uint", 0xFF000000, "float", 1.6 * k, "int", 2, "ptr*", &pen)
+    DllCall("gdiplus\GdipSetPenLineJoin", "ptr", pen, "int", 2) ; 둥근 모서리
+    DllCall("gdiplus\GdipDrawPolygon", "ptr", c.graphics, "ptr", pen, "ptr", pts, "int", shape.Length)
+    DllCall("gdiplus\GdipDeleteBrush", "ptr", brush)
+    DllCall("gdiplus\GdipDeletePen", "ptr", pen)
+    DllCall("gdiplus\GdipFlush", "ptr", c.graphics, "int", 0)
+}
+
+ZoomUpdateCursor(cx, cy) {
+    global zoomCursorGui, zoomCursorCanvas, zoomCursorPad, drawOn, brushGui
+    ; 드로잉 커서 원이 떠 있으면(판서 층 위) 그 원이 커서다
+    if (drawOn && DllCall("IsWindowVisible", "ptr", brushGui.Hwnd)) {
+        if IsObject(zoomCursorGui)
+            zoomCursorGui.Hide()
+        return
+    }
+    if !IsObject(zoomCursorGui)
+        ZoomCursorInit()
+    if !IsObject(zoomCursorCanvas) || !zoomCursorCanvas.graphics
+        return
+    x := cx, y := cy
+    ZoomScreenPos(&x, &y)
+    PushCanvasToWindow(zoomCursorGui.Hwnd, zoomCursorCanvas, x - zoomCursorPad, y - zoomCursorPad)
+    if !DllCall("IsWindowVisible", "ptr", zoomCursorGui.Hwnd)
+        DllCall("ShowWindow", "ptr", zoomCursorGui.Hwnd, "int", 8) ; SW_SHOWNA
 }

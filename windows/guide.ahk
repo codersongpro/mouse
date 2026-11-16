@@ -77,7 +77,8 @@ ShowUsageGuide(*) {
     GuideSection(g, &y, "확대 중", [
         ["Ctrl + 마우스 휠", "확대 단계 올리기 / 내리기"],
         ["Esc", "확대 끄기"],
-        [HotkeyText(hotkeyCombos["Draw"]) " (그리기)", "화면이 고정되고, 확대된 화면 위에 그립니다"],
+        ["가장자리로 이동", "확대 화면이 그쪽으로 움직입니다 (평소에는 화면 고정)"],
+        [HotkeyText(hotkeyCombos["Draw"]) " (그리기)", "확대된 화면 위에 그대로 그립니다"],
         ["화면 공유", "Zoom·Meet에서 '화면 전체'를 고르면 확대 화면이 그대로 보입니다"]])
     GuideSection(g, &y, "그리는 중", [
         ["Shift / Ctrl + 드래그", "사각형 / 원"],
