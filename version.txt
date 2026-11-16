@@ -1,2 +1,2 @@
-windows=1.0.0
+windows=1.0.1
 windows_url=https://github.com/codersongpro/mouse/releases/latest

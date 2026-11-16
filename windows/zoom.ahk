@@ -40,8 +40,7 @@ ZOOM_MAX_PCT := 800          ; 가장 큰 배율(%)
 ZOOM_STEP_DEFAULTS := [150, 200, 300] ; 1·2·3단계 기본 배율(%)
 ZOOM_BADGE_MS := 900         ; 단계가 바뀔 때 커서 옆에 뜨는 "2단계 · 200%" 표시 시간
 ZOOM_TICK_MS := 15           ; 확대 화면을 다시 그리는 간격 (약 60fps). 확대 중에만 돈다
-ZOOM_SMOOTH_FOLLOW := 0.45   ; 부드럽게: 한 번에 목표 위치로 다가가는 비율 (1 = 바로)
-ZOOM_SMOOTH_LEVEL := 0.30    ; 부드럽게: 한 번에 목표 배율로 다가가는 비율
+ZOOM_ANIM_MS := 220          ; 부드럽게: 단계가 바뀔 때 확대·축소에 걸리는 시간 (점점 느려지며 멈춤)
 ZOOM_EDGE_PX := 3            ; 드로잉 중(고정) 화면 가장자리에서 이만큼 안이면 그쪽으로 이동
 ZOOM_EDGE_SPEED := 24        ; 가장자리 이동 속도 (화면 픽셀/틱)
 
@@ -59,6 +58,8 @@ zoomOX := 0.0, zoomOY := 0.0               ; 원본 영역의 왼쪽 위 (화면
 zoomML := 0, zoomMT := 0, zoomMW := 0, zoomMH := 0  ; 확대 중인 모니터
 zoomSrcL := 0, zoomSrcT := 0, zoomSrcW := 1, zoomSrcH := 1 ; 마지막으로 보여준 원본 영역
 zoomFilterKey := ""   ; 확대에서 뺀 창 목록 (바뀌었을 때만 다시 알린다)
+zoomLastKey := ""     ; 마지막으로 확대 컨트롤에 넘긴 영역 (바뀌었을 때만 다시 넘긴다)
+zoomAnimFrom := 1.0, zoomAnimTo := 1.0, zoomAnimT0 := 0 ; 배율 애니메이션
 zoomStep := 0         ; 지금 단계 (0 = 꺼짐, 1~3)
 zoomBadge := ""       ; 단계 표시 창
 zoomBadgeText := ""
@@ -97,7 +98,7 @@ ZoomInit() {
         ; E0x80000 레이어드 + E0x20 클릭 통과 + E0x8000000 활성화 안 됨.
         ; 클릭 통과라 확대 중에도 클릭은 아래 프로그램(또는 판서 층)으로 그대로 간다.
         ; MouseGetPos도 이 창을 건너뛰므로 DrawPoll의 "커서 아래 창" 판정을 가리지 않는다.
-        zoomHost := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x8080020", "ClassZoom-Zoom")
+        zoomHost := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +0x2000000 +E0x8080020", "ClassZoom-Zoom") ; 0x2000000 = WS_CLIPCHILDREN (확대 화면 위에 바탕을 덧칠하지 않게)
         zoomHost.BackColor := "000000"
         zoomHost.Show("x0 y0 w8 h8 Hide")
         ; 레이어드 창은 투명도를 한 번 정해줘야 화면에 그려진다 (255 = 불투명, 2 = LWA_ALPHA)
@@ -150,7 +151,7 @@ ZoomSetStep(n) {
 
 ZoomStart(step := 1) {
     global zoomOn, zoomVisible, zoomClosing, zoomLevel, zoomTarget, zoomSteps, zoomSmooth, zoomStep
-    global zoomHost, zoomOX, zoomOY, zoomML, zoomMT, zoomFilterKey
+    global zoomHost, zoomOX, zoomOY, zoomML, zoomMT, zoomFilterKey, zoomAnimFrom, zoomAnimTo
     if !ZoomInit()
         return
     zoomOn := true
@@ -163,9 +164,8 @@ ZoomStart(step := 1) {
         MouseGetPos(&cx, &cy)
         ZoomUseMonitorAt(cx, cy)
         zoomLevel := zoomSmooth ? 1.0 : zoomTarget
+        zoomAnimFrom := zoomLevel, zoomAnimTo := zoomLevel ; ZoomTick이 목표가 바뀐 것을 보고 애니메이션을 시작한다
         zoomOX := zoomML, zoomOY := zoomMT
-        if !zoomSmooth ; 부드럽게가 꺼져 있으면 첫 화면부터 커서 기준 자리
-            ZoomFollowTarget(cx, cy, zoomLevel, &zoomOX, &zoomOY)
         zoomFilterKey := ""
         ZoomTick()           ; 첫 화면을 먼저 그려두고
         zoomHost.Show("NA")  ; 그다음 보여야 옛 화면이 번쩍이지 않는다
@@ -276,13 +276,6 @@ ZoomHideBadge() {
 }
 
 ; ---------------- 좌표 ----------------
-; 커서가 (cx, cy)에 있을 때 "커서가 가리키는 지점이 제자리에 오는" 원본 영역의 왼쪽 위
-ZoomFollowTarget(cx, cy, z, &ox, &oy) {
-    global zoomML, zoomMT
-    ox := zoomML + (cx - zoomML) * (1 - 1 / z)
-    oy := zoomMT + (cy - zoomMT) * (1 - 1 / z)
-}
-
 ; 화면 좌표(진짜 커서 자리) → 원본 좌표(그 자리에 보이는 내용이 실제로 있는 곳).
 ; 확대가 꺼져 있으면 그대로 둔다. 판서·지우개·드로잉 커서 원이 이 좌표를 쓴다.
 ZoomMapPoint(&x, &y) {
@@ -302,9 +295,11 @@ ZoomMapPt(pt) {
 ; 커서가 있는 모니터로 확대 창을 옮긴다
 ZoomUseMonitorAt(x, y) {
     global zoomML, zoomMT, zoomMW, zoomMH, zoomHost, zoomMag
+    global zoomLastKey, zoomSrcW, zoomSrcH, zoomOX, zoomOY
     if !GetMonitorAt(x, y, &ml, &mt, &mr, &mb, &wl, &wt, &wr, &wb)
         ml := 0, mt := 0, mr := A_ScreenWidth, mb := A_ScreenHeight
     zoomML := ml, zoomMT := mt, zoomMW := mr - ml, zoomMH := mb - mt
+    zoomLastKey := "", zoomSrcW := zoomMW, zoomSrcH := zoomMH, zoomOX := ml, zoomOY := mt
     ; Gui.Move는 DPI 배율을 거치므로 창 크기는 실제 픽셀로 직접 정한다
     DllCall("SetWindowPos", "ptr", zoomHost.Hwnd, "ptr", 0, "int", ml, "int", mt
         , "int", zoomMW, "int", zoomMH, "uint", 0x14) ; SWP_NOZORDER | SWP_NOACTIVATE
@@ -313,33 +308,50 @@ ZoomUseMonitorAt(x, y) {
 
 ; ---------------- 한 프레임 ----------------
 ZoomTick() {
-    global zoomOn, zoomClosing, zoomLevel, zoomTarget, zoomSmooth, zoomOX, zoomOY
+    global zoomOn, zoomClosing, zoomLevel, zoomTarget, zoomSmooth, zoomOX, zoomOY, zoomLastKey
     global zoomML, zoomMT, zoomMW, zoomMH, zoomSrcL, zoomSrcT, zoomSrcW, zoomSrcH, zoomMag
-    global drawOn, penStroke, ZOOM_SMOOTH_FOLLOW, ZOOM_SMOOTH_LEVEL, ZOOM_EDGE_PX, ZOOM_EDGE_SPEED
+    global zoomAnimFrom, zoomAnimTo, zoomAnimT0, ZOOM_ANIM_MS
+    global drawOn, penStroke, ZOOM_EDGE_PX, ZOOM_EDGE_SPEED
     MouseGetPos(&cx, &cy)
     frozen := drawOn ; 드로잉 중에는 화면을 고정한다
 
     ; 따라가는 중에 커서가 다른 모니터로 넘어가면 확대 창도 따라간다
-    if (!frozen && (cx < zoomML || cy < zoomMT || cx >= zoomML + zoomMW || cy >= zoomMT + zoomMH)) {
+    if (!frozen && (cx < zoomML || cy < zoomMT || cx >= zoomML + zoomMW || cy >= zoomMT + zoomMH))
         ZoomUseMonitorAt(cx, cy)
-        ZoomFollowTarget(cx, cy, zoomLevel, &zoomOX, &zoomOY)
+
+    ; ---- 배율: 시간 기준 애니메이션 (끝으로 갈수록 느려지는 ease-out) ----
+    ; 예전에는 매 프레임 "남은 거리의 일정 비율"만큼 다가갔는데, 프레임 간격이 들쭉날쭉하면
+    ; 속도도 들쭉날쭉해져 출렁여 보였다. 시작 시각을 기준으로 계산하면 늘 같은 곡선을 탄다.
+    target := zoomClosing ? 1.0 : zoomTarget
+    if (target != zoomAnimTo)
+        zoomAnimFrom := zoomLevel, zoomAnimTo := target, zoomAnimT0 := A_TickCount
+    if (!zoomSmooth || zoomAnimFrom = zoomAnimTo)
+        z := zoomAnimTo
+    else {
+        p := Min(1, (A_TickCount - zoomAnimT0) / ZOOM_ANIM_MS)
+        z := zoomAnimFrom + (zoomAnimTo - zoomAnimFrom) * (1 - (1 - p) ** 3)
+    }
+    zoomLevel := z
+    if (zoomClosing && z <= 1.0) {
+        ZoomHide()
+        return
     }
 
-    ; 배율: 목표로 다가간다 (끄는 중이면 1로)
-    target := zoomClosing ? 1.0 : zoomTarget
-    z := zoomSmooth ? zoomLevel + (target - zoomLevel) * ZOOM_SMOOTH_LEVEL : target
-    if (Abs(target - z) < 0.003)
-        z := target
+    ; ---- 원본 영역 크기: 가로를 정수로 정하고, 세로는 **같은 배율**에서 나오게 한다 ----
+    ; 가로·세로 배율을 따로 반올림하면 프레임마다 비율이 미세하게 달라져 화면이 일렁인다.
+    srcW := Max(1, Round(zoomMW / z))
+    srcH := Max(1, Min(zoomMH, Round(zoomMH * srcW / zoomMW)))
+    rx := cx - zoomML, ry := cy - zoomMT
 
     if frozen {
-        ; 배율이 바뀌어도 커서 아래 지점은 그대로 둔다
-        if (z != zoomLevel) {
-            sx := zoomOX + (cx - zoomML) / zoomLevel, sy := zoomOY + (cy - zoomMT) / zoomLevel
-            zoomOX := sx - (cx - zoomML) / z, zoomOY := sy - (cy - zoomMT) / z
+        ; 크기가 바뀌어도 커서 아래 지점은 그대로 둔다 (직전 화면의 실제 영역 기준)
+        if (srcW != zoomSrcW || srcH != zoomSrcH) {
+            sx := zoomOX + rx * zoomSrcW / zoomMW, sy := zoomOY + ry * zoomSrcH / zoomMH
+            zoomOX := sx - rx * srcW / zoomMW, zoomOY := sy - ry * srcH / zoomMH
         }
         ; 버튼을 누르지 않은 채 가장자리로 밀면 그쪽으로 이동한다 (긋는 중에는 움직이지 않는다)
         if (!penStroke && !GetKeyState("LButton", "P") && !GetKeyState("RButton", "P")) {
-            step := ZOOM_EDGE_SPEED / z
+            step := ZOOM_EDGE_SPEED * srcW / zoomMW
             if (cx <= zoomML + ZOOM_EDGE_PX)
                 zoomOX -= step
             else if (cx >= zoomML + zoomMW - 1 - ZOOM_EDGE_PX)
@@ -350,40 +362,35 @@ ZoomTick() {
                 zoomOY += step
         }
     } else {
-        ZoomFollowTarget(cx, cy, z, &tx, &ty)
-        k := zoomSmooth ? ZOOM_SMOOTH_FOLLOW : 1
-        zoomOX += (tx - zoomOX) * k
-        zoomOY += (ty - zoomOY) * k
-        if (Abs(tx - zoomOX) < 0.5 && Abs(ty - zoomOY) < 0.5)
-            zoomOX := tx, zoomOY := ty
+        ; 커서 기준: 커서가 가리키는 지점이 확대 후에도 같은 자리에 오도록.
+        ; **실제로 쓸 정수 크기(srcW·srcH)로 바로 계산**해 위치와 크기가 서로 어긋나 떨리지 않게 한다.
+        zoomOX := zoomML + rx * (1 - srcW / zoomMW)
+        zoomOY := zoomMT + ry * (1 - srcH / zoomMH)
     }
-    zoomLevel := z
-
-    if (zoomClosing && z <= 1.0) {
-        ZoomHide()
-        return
-    }
-
-    ; 원본 영역 (모니터 밖으로 나가지 않게)
-    srcW := Max(1, Round(zoomMW / z)), srcH := Max(1, Round(zoomMH / z))
     zoomOX := Max(zoomML, Min(zoomML + zoomMW - srcW, zoomOX))
     zoomOY := Max(zoomMT, Min(zoomMT + zoomMH - srcH, zoomOY))
     l := Round(zoomOX), t := Round(zoomOY)
-    zoomSrcL := l, zoomSrcT := t, zoomSrcW := srcW, zoomSrcH := srcH
 
-    ; 배율 행렬 (3x3 float). 가로세로를 따로 줘서 반올림 오차 없이 창을 꽉 채운다
-    static m := Buffer(36, 0), rc := Buffer(16, 0)
-    NumPut("float", zoomMW / srcW, m, 0)
-    NumPut("float", zoomMH / srcH, m, 16)
-    NumPut("float", 1.0, m, 32)
-    DllCall("Magnification\MagSetWindowTransform", "ptr", zoomMag, "ptr", m, "int")
-    ; RECT를 값으로 넘기는 함수다. 64비트에서는 16바이트 구조체가 포인터로 넘어간다
-    if (A_PtrSize = 8) {
-        NumPut("int", l, "int", t, "int", l + srcW, "int", t + srcH, rc)
-        DllCall("Magnification\MagSetWindowSource", "ptr", zoomMag, "ptr", rc, "int")
-    } else
-        DllCall("Magnification\MagSetWindowSource", "ptr", zoomMag, "int", l, "int", t, "int", l + srcW, "int", t + srcH, "int")
-    DllCall("InvalidateRect", "ptr", zoomMag, "ptr", 0, "int", true)
+    ; ---- 바뀐 것이 있을 때만 확대 컨트롤에 넘긴다 ----
+    key := l "," t "," srcW "," srcH
+    if (key != zoomLastKey) {
+        static m := Buffer(36, 0), rc := Buffer(16, 0)
+        NumPut("float", zoomMW / srcW, m, 0)
+        NumPut("float", zoomMH / srcH, m, 16)
+        NumPut("float", 1.0, m, 32)
+        DllCall("Magnification\MagSetWindowTransform", "ptr", zoomMag, "ptr", m, "int")
+        ; RECT를 값으로 넘기는 함수다. 64비트에서는 16바이트 구조체가 포인터로 넘어간다
+        if (A_PtrSize = 8) {
+            NumPut("int", l, "int", t, "int", l + srcW, "int", t + srcH, rc)
+            DllCall("Magnification\MagSetWindowSource", "ptr", zoomMag, "ptr", rc, "int")
+        } else
+            DllCall("Magnification\MagSetWindowSource", "ptr", zoomMag, "int", l, "int", t, "int", l + srcW, "int", t + srcH, "int")
+        zoomLastKey := key
+    }
+    zoomSrcL := l, zoomSrcT := t, zoomSrcW := srcW, zoomSrcH := srcH
+    ; 화면 내용(영상 등)은 계속 바뀌므로 매 프레임 다시 그리게 한다.
+    ; **배경 지우기는 하지 않는다(마지막 인자 false)** — 지우면 매 프레임 검게 번쩍여 흔들려 보였다.
+    DllCall("InvalidateRect", "ptr", zoomMag, "ptr", 0, "int", false)
 
     ZoomUpdateFilter()
     ZoomKeepOrder()

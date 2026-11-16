@@ -1,8 +1,7 @@
-﻿ClassZoom 1.0
+﻿ClassZoom
 수업용 실시간 화면 확대 · 마우스 강조 · 화면 드로잉 (Windows 10 / 11)
 
 내려받기: https://github.com/codersongpro/mouse/releases/latest
-강조·드로잉 기능은 Focus & Draw (maker_SSAM, MIT 라이선스)를 바탕으로 했습니다.
 
 
 [ 시작하기 ]

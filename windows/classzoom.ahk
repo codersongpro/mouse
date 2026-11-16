@@ -9,8 +9,8 @@
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
 ;@Ahk2Exe-SetDescription ClassZoom - 실시간 화면 확대 / 마우스 강조 / 화면 드로잉
-;@Ahk2Exe-SetVersion 1.0.0
-;@Ahk2Exe-SetCopyright ClassZoom (c) 2026 codersongpro. Based on Focus & Draw (c) 2026 maker_SSAM. MIT License
+;@Ahk2Exe-SetVersion 1.0.1
+;@Ahk2Exe-SetCopyright ClassZoom (c) 2026 codersongpro. MIT License
 
 Persistent()
 SetWinDelay(-1)
@@ -24,14 +24,14 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.0.0" ; ClassZoom 첫 판 (원작 Focus & Draw 2.0.1 바탕)
+APP_VERSION := "1.0.1"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
 ; ClassZoom은 codersongpro/mouse 저장소에서 배포한다(원작 Focus & Draw와 별개의 프로그램).
 UPDATE_FILE_URL := "https://raw.githubusercontent.com/codersongpro/mouse/main/version.txt"
 RELEASES_URL := "https://github.com/codersongpro/mouse/releases/latest"
-AUTHOR_URL := "https://github.com/maker-SSAM/focus-draw" ; 설정 창의 "원작" 링크
+AUTHOR_URL := "https://github.com/codersongpro/mouse" ; 설정 창의 홈페이지 링크
 updateReq := "", updateDeadline := 0, updateUrl := RELEASES_URL, lblUpdate := ""
 
 A_IconTip := "ClassZoom v" APP_VERSION " - 화면 확대 / 마우스 강조 / 화면 드로잉"
@@ -172,6 +172,7 @@ PxToStep(px, basePx, ratio) {
 ; ================= 라이브 확대 (zoom.ahk) =================
 ; 확대 기능은 따로 떼어 둔 파일에 있다. LoadSettings()가 확대 설정도 읽으므로 그보다 위에서 불러온다.
 #Include zoom.ahk
+#Include guide.ahk ; 처음 실행할 때 뜨는 사용 방법 안내 창
 
 ; ================= 설정값 (settings.ini에서 불러옴, 없으면 기본값) =================
 ; spotOpacity는 0~100(%)로 저장/표시하고, 실제 WinSetTransparent에 쓸 때만 0~255로 환산한다.
@@ -241,7 +242,8 @@ LoadSettings() {
         combo := IniRead(SETTINGS_PATH, "Hotkeys", name, def)
         hotkeyCombos[name] := IsSafeHotkey(combo) ? combo : def
     }
-    ZoomLoadSettings() ; [Zoom] 기본 배율·부드럽게 (zoom.ahk)
+    ZoomLoadSettings() ; [Zoom] 단계 배율·부드럽게 (zoom.ahk)
+    GuideLoadSettings() ; [Common] ShowGuide (guide.ahk)
 }
 
 ; 저장에 성공하면 참을 돌려준다.
@@ -308,6 +310,7 @@ WriteSettings() {
     try IniDelete(SETTINGS_PATH, "Draw", "EraserSize")
     SavePalette()
     ZoomWriteSettings() ; [Zoom] (zoom.ahk)
+    GuideWriteSettings() ; [Common] ShowGuide (guide.ahk)
     return true
 }
 
@@ -387,7 +390,7 @@ LoadSettings()
 ; 컴파일했을 때와 .ahk 소스로 실행할 때 모두 지금 실행 중인 파일의 실제 경로(A_ScriptFullPath)를
 ; 그대로 써서, 둘 중 어느 형태로 실행 중이든 그 형태로 다시 켜지게 한다.
 STARTUP_RUN_KEY := "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
-STARTUP_RUN_NAME := "ClassZoom" ; 원작 Focus & Draw와 겹치지 않게
+STARTUP_RUN_NAME := "ClassZoom"
 
 IsRunAtStartup() {
     global STARTUP_RUN_KEY, STARTUP_RUN_NAME
@@ -4004,7 +4007,7 @@ OpenSettingsWindow(*) {
     AddSliderRow(settingsGui, 86, "2단계", ZOOM_MIN_PCT, ZOOM_MAX_PCT, zoomSteps[2], "%", (v) => ZoomApplyStepLevel(2, v), 25)
     AddSliderRow(settingsGui, 120, "3단계", ZOOM_MIN_PCT, ZOOM_MAX_PCT, zoomSteps[3], "%", (v) => ZoomApplyStepLevel(3, v), 25)
     chkZoomSmooth := settingsGui.AddCheckbox("x30 y164 w20 h20 " (zoomSmooth ? "Checked" : ""), "")
-    settingsGui.AddText("x54 y165 w380", "부드럽게 움직이기 (끄면 커서를 바로 따라갑니다)")
+    settingsGui.AddText("x54 y165 w380", "부드럽게 확대·축소 (끄면 단계가 바로 바뀝니다)")
     chkZoomSmooth.OnEvent("Click", (ctrl, *) => (zoomSmooth := ctrl.Value ? true : false))
     settingsGui.AddText("x30 y200 w420 h2 0x10")
     lblZoomHelp := settingsGui.AddText("x30 y212 w420 h300"
@@ -4055,6 +4058,8 @@ OpenSettingsWindow(*) {
 
     ; 자주 누를 버튼이 아니고 되돌릴 수도 없어서, 다른 항목과 떨어뜨려 놓고 글자색만 연하게 한다
     ; (배경색은 테마 버튼이라 바꿀 수 없다 — "프로그램 종료" 버튼과 같은 처지다).
+    btnGuide := settingsGui.AddButton("x140 y180 w200 h32", "사용 방법 보기")
+    btnGuide.OnEvent("Click", ShowUsageGuide)
     btnResetAll := settingsGui.AddButton("x140 y312 w200 h32", "모든 설정값 초기화")
     btnResetAll.SetFont("c999999")
     btnResetAll.OnEvent("Click", (*) => ResetAllSettings())
@@ -4069,7 +4074,7 @@ OpenSettingsWindow(*) {
     lblVersion := settingsGui.AddText("x22 y500 w436 Center +0x80", "ClassZoom 버전 " APP_VERSION)
     lblVersion.SetFont("s9 c999999")
     ; 제작자 이름을 누르면 개인페이지가 열린다 (링크처럼 보이게 파란 밑줄 글씨)
-    lblAuthor := settingsGui.AddText("x22 y520 w436 Center +0x80", "원작: Focus & Draw (maker_SSAM, MIT 라이선스)")
+    lblAuthor := settingsGui.AddText("x22 y520 w436 Center", "ClassZoom 홈페이지")
     lblAuthor.SetFont("s9 c0066CC underline")
     lblAuthor.OnEvent("Click", (*) => Run(AUTHOR_URL))
 
@@ -4909,6 +4914,7 @@ SetWidgetVisible(show) {
 }
 
 A_TrayMenu.Delete()
+A_TrayMenu.Add("사용 방법", ShowUsageGuide)
 A_TrayMenu.Add("설정...", OpenSettingsWindow)
 A_TrayMenu.Add(TRAY_WIDGET_ITEM, (*) => SetWidgetVisible(!showWidget))
 A_TrayMenu.Add("종료", (*) => ExitApp())
@@ -5281,3 +5287,7 @@ ChangeHotkey(name, combo, ctrl) {
     hotkeyApplying := false
 }
 
+; ================= 처음 실행할 때 사용 방법 안내 =================
+; 위젯·단축키가 모두 준비된 뒤에 띄운다. "다음부터 보지 않기"를 체크했으면 뜨지 않는다 (guide.ahk).
+if showGuideOnStart
+    SetTimer(ShowUsageGuide, -600)
