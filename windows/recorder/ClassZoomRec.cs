@@ -223,10 +223,19 @@ namespace ClassZoom
         }
 
         // 제어 파일에 적힌 지금 명령 (rec / pause / stop). 본체가 꺼졌으면 stop으로 본다.
+        // 본체가 파일을 막 고쳐 쓰는 순간에는 비어 있거나 읽히지 않을 수 있다. 그때는 직전 명령을 그대로 쓴다
+        // (예전에는 이 순간을 "rec"으로 읽어 정지 명령을 놓치거나, 빈 값으로 읽어 조각을 헛되이 끊었다).
+        static string lastCmd = "rec";
         static string Command(Process parent)
         {
             if (parent != null && parent.HasExited) return "stop";
-            try { return File.ReadAllText(controlPath).Trim().ToLowerInvariant(); } catch { return "rec"; }
+            try
+            {
+                string c = File.ReadAllText(controlPath).Trim().ToLowerInvariant();
+                if (c == "rec" || c == "pause" || c == "stop") lastCmd = c;
+            }
+            catch { }
+            return lastCmd;
         }
 
         [MTAThread]
@@ -245,6 +254,10 @@ namespace ClassZoom
             int x = ArgInt("x", 0), y = ArgInt("y", 0), w = ArgInt("w", 1920), h = ArgInt("h", 1080);
             int fps = Math.Max(5, Math.Min(60, ArgInt("fps", 30)));
             w -= w % 2; h -= h % 2; // H.264는 짝수 크기여야 한다
+            // 화질: high(고화질) / normal(표준) / low(저용량: 가로 1280 이하로 줄이고 비트레이트도 낮춘다)
+            string quality = Arg("quality", "normal").ToLowerInvariant();
+            int outW = w, outH = h;
+            if (quality == "low" && w > 1280) { outW = 1280; outH = (int)Math.Round((double)h * 1280 / w); outH -= outH % 2; }
             bool useMic = Arg("mic", "1") == "1", useSys = Arg("sys", "1") == "1";
             Process parent = null;
             try { int pid = ArgInt("parent", 0); if (pid > 0) parent = Process.GetProcessById(pid); } catch { }
@@ -259,8 +272,12 @@ namespace ClassZoom
             if (useSys) { var s = new AudioSource("sys"); if (s.Init(true)) sources.Add(s); else Log("system audio unavailable"); }
 
             string vcodec = PickVideoCodec(ffmpeg, fps);
-            long bitrate = Math.Max(2000000L, (long)w * h * fps / 10);
-            Log("video " + w + "x" + h + "@" + fps + " " + vcodec + ", audio sources " + sources.Count);
+            double bpp = quality == "high" ? 0.2 : quality == "low" ? 0.06 : 0.1; // 화소 하나에 쓰는 비트
+            long minRate = quality == "high" ? 4000000L : quality == "low" ? 1000000L : 2000000L;
+            long bitrate = Math.Max(minRate, (long)(outW * (double)outH * fps * bpp));
+            int mpegQ = quality == "high" ? 2 : quality == "low" ? 6 : 3;
+            string scale = (outW != w) ? "-vf scale=" + outW + ":" + outH + " " : "";
+            Log("video " + w + "x" + h + " -> " + outW + "x" + outH + "@" + fps + " " + vcodec + " " + quality + " " + bitrate + ", audio sources " + sources.Count);
 
             var parts = new List<string>();
             int seg = 0;
@@ -270,7 +287,7 @@ namespace ClassZoom
                 if (cmd == "pause") { Status("paused"); while ((cmd = Command(parent)) == "pause") Thread.Sleep(100); continue; }
 
                 // ---- 조각 하나 녹화 ----
-                string part = Path.Combine(partsDir, "part" + seg.ToString("000") + ".mp4");
+                string part = Path.Combine(partsDir, "part" + seg.ToString("000") + ".mkv");
                 var sb = new StringBuilder("-hide_banner -loglevel warning -y ");
                 sb.Append("-thread_queue_size 1024 -f gdigrab -framerate " + fps + " -offset_x " + x + " -offset_y " + y +
                           " -video_size " + w + "x" + h + " -draw_mouse 1 -i desktop ");
@@ -284,9 +301,11 @@ namespace ClassZoom
                     sb.Append("-filter_complex \"[1:a][2:a]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0[a]\" -map 0:v -map \"[a]\" ");
                 else if (sources.Count == 1)
                     sb.Append("-map 0:v -map 1:a ");
-                sb.Append(vcodec == "h264_mf" ? "-c:v h264_mf -b:v " + bitrate + " -pix_fmt nv12 " : "-c:v mpeg4 -q:v 3 -pix_fmt yuv420p ");
+                sb.Append(scale);
+                sb.Append(vcodec == "h264_mf" ? "-c:v h264_mf -b:v " + bitrate + " -pix_fmt nv12 " : "-c:v mpeg4 -q:v " + mpegQ + " -pix_fmt yuv420p ");
                 if (sources.Count > 0) sb.Append("-c:a aac -b:a 160k -ar 48000 -ac 2 ");
-                sb.Append("-movflags +faststart \"" + part + "\"");
+                // 조각은 MKV로 둔다. 혹시 FFmpeg을 강제로 끝내도 그때까지 찍힌 부분이 살아 있다.
+                sb.Append("-f matroska \"" + part + "\"");
 
                 var ff = StartFfmpeg(ffmpeg, sb.ToString());
                 if (ff == null) { foreach (var s in sources) s.EndSegment(); Status("error 녹화 엔진을 시작하지 못했습니다."); return 1; }
@@ -302,15 +321,14 @@ namespace ClassZoom
             // ---- 조각 잇기 ----
             Status("saving");
             if (parts.Count == 0) { Status("error 녹화된 내용이 없습니다."); return 1; }
-            if (parts.Count == 1) File.Copy(parts[0], outPath, true);
-            else
             {
+                // 조각이 하나여도 MKV → MP4로 옮겨 담는다 (다시 압축하지 않아 금방 끝난다)
                 string list = Path.Combine(partsDir, "list.txt");
                 var sbl = new StringBuilder();
                 foreach (var p in parts) sbl.Append("file '" + p.Replace("'", "'\\''") + "'\n");
                 File.WriteAllText(list, sbl.ToString(), new UTF8Encoding(false));
                 var cat = StartFfmpeg(ffmpeg, "-hide_banner -loglevel warning -y -f concat -safe 0 -i \"" + list + "\" -c copy -movflags +faststart \"" + outPath + "\"");
-                if (cat != null) cat.WaitForExit(600000);
+                if (cat != null && !cat.WaitForExit(600000)) { try { cat.Kill(); } catch { } }
             }
             if (!File.Exists(outPath)) { Status("error 영상 파일을 만들지 못했습니다. (" + logPath + ")"); return 1; }
             try { Directory.Delete(partsDir, true); } catch { }
@@ -354,7 +372,7 @@ namespace ClassZoom
         {
             if (p.HasExited) return;
             try { p.StandardInput.Write("q"); p.StandardInput.Flush(); } catch { }
-            if (!p.WaitForExit(20000)) { try { p.Kill(); } catch { } }
+            if (!p.WaitForExit(8000)) { try { p.Kill(); } catch { } } // MKV라 강제로 끝내도 조각은 쓸 수 있다
         }
     }
 }

@@ -52,6 +52,7 @@ final class Settings: ObservableObject {
     @Published var recMic = true
     @Published var recSys = true
     @Published var recFps: Double = 30
+    @Published var recQuality: Double = 1 // 0 저용량 · 1 표준 · 2 고화질
     var widgetX: Double? = nil
     var widgetY: Double? = nil
     // [Hotkeys]: AHK 표기 그대로 든다 (Platform/HotkeyNotation.swift가 읽는다)

@@ -134,7 +134,7 @@ jobs:
           New-Item -ItemType Directory -Force $t | Out-Null
           $out = Join-Path $t 'test.mp4'
           Set-Content -Path "$t\ctl" -Value 'rec' -NoNewline
-          $p = Start-Process dist\classzoom-rec.exe -PassThru -ArgumentList "--ffmpeg=$PWD\dist\ffmpeg.exe", "--out=$out", "--control=$t\ctl", "--status=$t\status", "--log=$t\log", '--x=0', '--y=0', '--w=640', '--h=480', '--fps=15', '--mic=1', '--sys=1'
+          $p = Start-Process dist\classzoom-rec.exe -PassThru -ArgumentList "--ffmpeg=$PWD\dist\ffmpeg.exe", "--out=$out", "--control=$t\ctl", "--status=$t\status", "--log=$t\log", '--x=0', '--y=0', '--w=640', '--h=480', '--fps=15', '--quality=high', '--mic=1', '--sys=1'
           Start-Sleep 3
           Set-Content -Path "$t\ctl" -Value 'pause' -NoNewline
           Start-Sleep 1

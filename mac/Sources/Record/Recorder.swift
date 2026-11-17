@@ -134,6 +134,7 @@ import ScreenCaptureKit
             let local = CGRect(x: rect.minX - scr.frame.minX, y: scr.frame.maxY - rect.maxY, width: rect.width, height: rect.height)
             var w = Int(rect.width * scale), h = Int(rect.height * scale)
             w -= w % 2; h -= h % 2
+            (w, h) = recordSize(w, h)
             let cfg = SCStreamConfiguration()
             if local.size != scr.frame.size { cfg.sourceRect = local }
             cfg.width = w
@@ -148,7 +149,7 @@ import ScreenCaptureKit
             cfg.channelCount = 2
 
             let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("classzoom-\(UUID().uuidString).mp4")
-            let eng = try RecordEngine(url: tmp, width: w, height: h, system: s.recSys, mic: useMic)
+            let eng = try RecordEngine(url: tmp, width: w, height: h, system: s.recSys, mic: useMic, quality: recordQuality())
             engine = eng
 
             let st = SCStream(filter: filter, configuration: cfg, delegate: nil)
@@ -191,6 +192,7 @@ import ScreenCaptureKit
         let scale = scr.backingScaleFactor
         var w = Int(rect.width * scale), h = Int(rect.height * scale)
         w -= w % 2; h -= h % 2
+        (w, h) = recordSize(w, h)
         if local.size != scr.frame.size { cfg.sourceRect = local }
         cfg.width = w; cfg.height = h
         cfg.pixelFormat = kCVPixelFormatType_32BGRA
@@ -373,6 +375,17 @@ enum RecordError: Error, CustomStringConvertible {
     }
 }
 
+// ---------- 화질 (설정 › 확대·녹화 › 화질): 0 저용량 · 1 표준 · 2 고화질 ----------
+@MainActor func recordQuality() -> Int { Int(max(0, min(2, Settings.shared.recQuality.rounded()))) }
+
+// 저용량은 가로 1280 이하로 줄인다 (레티나 화면은 화소가 많아 파일이 금방 커진다)
+@MainActor func recordSize(_ w: Int, _ h: Int) -> (Int, Int) {
+    guard recordQuality() == 0, w > 1280 else { return (w, h) }
+    var nh = Int((Double(h) * 1280 / Double(w)).rounded())
+    nh -= nh % 2
+    return (1280, max(2, nh))
+}
+
 // ---------- 받은 것을 파일에 쓰기 (writeQueue에서만 돈다) ----------
 final class RecordEngine: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSampleBufferDelegate {
     let queue = DispatchQueue(label: "classzoom.record")
@@ -387,10 +400,12 @@ final class RecordEngine: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSamp
     private var offset = CMTime.zero
     private var finished = false
 
-    init(url: URL, width: Int, height: Int, system: Bool, mic: Bool) throws {
+    init(url: URL, width: Int, height: Int, system: Bool, mic: Bool, quality: Int = 1) throws {
         self.url = url
         do { writer = try AVAssetWriter(outputURL: url, fileType: .mp4) } catch { throw RecordError.writer(error.localizedDescription) }
-        let bitrate = max(2_000_000, width * height * 4)
+        // 화소 하나에 쓰는 비트 수(초당): 저용량 2 · 표준 4 · 고화질 8
+        let perPixel = [2, 4, 8][max(0, min(2, quality))]
+        let bitrate = max([1_000_000, 2_000_000, 4_000_000][max(0, min(2, quality))], width * height * perPixel)
         video = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: width,

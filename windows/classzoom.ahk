@@ -9,7 +9,7 @@
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
 ;@Ahk2Exe-SetDescription ClassZoom - 라이브 줌 / 마우스 하이라이트 / 드로잉 / 화면 녹화
-;@Ahk2Exe-SetVersion 1.2.2
+;@Ahk2Exe-SetVersion 1.2.3
 ;@Ahk2Exe-SetCopyright © 2026 송동석 (Songpro / Dustin). MIT License
 ;@Ahk2Exe-SetCompanyName Songpro
 
@@ -25,7 +25,7 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.2.2"
+APP_VERSION := "1.2.3"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
@@ -3933,7 +3933,7 @@ OpenSettingsWindow(*) {
     global SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, widget, settingsGui, hideCursorOnHighlight, spotlightOn, APP_VERSION, drawOn, chkWidgetCtrl, widgetScale, widgetOpacity
     global paletteBar, PALETTE_X, PALETTE_Y, PALETTE_W, PALETTE_H, lblUpdate
     global zoomSteps, zoomSmooth
-    global recMode, recMic, recSys, recFps, recFolder
+    global recMode, recMic, recSys, recFps, recFolder, recQuality
 
     ; 판서 모드는 화면 전체를 오버레이로 덮어서 "그리기 말고는 아무것도 클릭되지 않는" 상태로
     ; 만드는 게 목적이라, 설정 창도 그 아래에 깔려 조작할 수 없다. 설정 창을 띄우려고 했다는
@@ -4067,14 +4067,22 @@ OpenSettingsWindow(*) {
     settingsGui.AddText("x54 y129 w420", "컴퓨터 소리(영상·효과음) 함께 녹음")
     chkSys.OnEvent("Click", (ctrl, *) => recSys := ctrl.Value ? true : false)
     AddSliderRow(settingsGui, 166, "초당 화면", 10, 60, recFps, "장", (v) => recFps := v, 5)
-    settingsGui.AddText("x30 y212 w70", "저장 폴더")
-    lblRecFolder := settingsGui.AddEdit("x100 y208 w300 h24 ReadOnly", RecSaveFolder())
-    btnRecFolder := settingsGui.AddButton("x406 y207 w60 h26", "바꾸기")
-    btnRecOpen := settingsGui.AddButton("x470 y207 w60 h26", "열기")
+    ; 화질: 고화질(원본 크기, 선명) / 표준 / 저용량(가로 1280 이하로 줄여 파일이 작다)
+    settingsGui.AddText("x30 y210 w70", "화질")
+    rdQHigh := settingsGui.AddRadio("x100 y209 w110 Group " (recQuality = "high" ? "Checked" : ""), "고화질")
+    rdQNormal := settingsGui.AddRadio("x210 y209 w110 " (recQuality = "normal" ? "Checked" : ""), "표준")
+    rdQLow := settingsGui.AddRadio("x320 y209 w200 " (recQuality = "low" ? "Checked" : ""), "저용량 (720p 정도)")
+    rdQHigh.OnEvent("Click", (*) => recQuality := "high")
+    rdQNormal.OnEvent("Click", (*) => recQuality := "normal")
+    rdQLow.OnEvent("Click", (*) => recQuality := "low")
+    settingsGui.AddText("x30 y246 w70", "저장 폴더")
+    lblRecFolder := settingsGui.AddEdit("x100 y242 w300 h24 ReadOnly", RecSaveFolder())
+    btnRecFolder := settingsGui.AddButton("x406 y241 w60 h26", "바꾸기")
+    btnRecOpen := settingsGui.AddButton("x470 y241 w60 h26", "열기")
     btnRecFolder.OnEvent("Click", (*) => (d := DirSelect("*" RecSaveFolder(), 3, "녹화 파일을 저장할 폴더를 고르세요"), d != "" ? (recFolder := d, lblRecFolder.Value := d) : 0))
     btnRecOpen.OnEvent("Click", (*) => (DirCreate(RecSaveFolder()), Run('explorer.exe "' RecSaveFolder() '"')))
-    settingsGui.AddText("x30 y252 w500 h2 0x10")
-    lblRecHelp := settingsGui.AddText("x30 y264 w500 h260"
+    settingsGui.AddText("x30 y282 w500 h2 0x10")
+    lblRecHelp := settingsGui.AddText("x30 y294 w500 h240"
         , "• F10: 녹화 시작 · 정지   /   Ctrl + F10: 일시정지 · 계속`n"
         . "• Ctrl + Shift + F10: 마우스로 영역을 골라 그 부분만 녹화`n"
         . "• 위젯의 녹화 버튼을 누르면 시작 · 정지, 오른쪽 클릭하면 범위를 고릅니다.`n`n"

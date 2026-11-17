@@ -30,8 +30,11 @@ recDim := "", recHint := "", recCount := ""
 ; settings.ini [Record]
 recMode := "screen"         ; "screen" = 모니터 전체 / "area" = 시작할 때 영역 지정
 recMic := true, recSys := true, recFps := 30, recFolder := ""
+recQuality := "normal"      ; "high" 고화질 / "normal" 표준 / "low" 저용량(가로 1280 이하)
 RecLoadSettings() {
-    global SETTINGS_PATH, recMode, recMic, recSys, recFps, recFolder
+    global SETTINGS_PATH, recMode, recMic, recSys, recFps, recFolder, recQuality
+    q := IniRead(SETTINGS_PATH, "Record", "Quality", "normal")
+    recQuality := (q = "high" || q = "low") ? q : "normal"
     recMode := IniRead(SETTINGS_PATH, "Record", "Mode", "screen") = "area" ? "area" : "screen"
     recMic := ReadIniNum("Record", "Mic", 0, 1, 1) = 1
     recSys := ReadIniNum("Record", "System", 0, 1, 1) = 1
@@ -39,7 +42,8 @@ RecLoadSettings() {
     recFolder := IniRead(SETTINGS_PATH, "Record", "Folder", "")
 }
 RecWriteSettings() {
-    global SETTINGS_PATH, recMode, recMic, recSys, recFps, recFolder
+    global SETTINGS_PATH, recMode, recMic, recSys, recFps, recFolder, recQuality
+    IniWrite(recQuality, SETTINGS_PATH, "Record", "Quality")
     IniWrite(recMode, SETTINGS_PATH, "Record", "Mode")
     IniWrite(recMic ? 1 : 0, SETTINGS_PATH, "Record", "Mic")
     IniWrite(recSys ? 1 : 0, SETTINGS_PATH, "Record", "System")
@@ -116,13 +120,15 @@ RecToggleArea(*) {
 RecPauseToggle(*) {
     global recState, recElapsed, recSince
     if (recState = "rec") {
+        if !RecWriteControl("pause")
+            return RecControlFailed()
         recElapsed += A_TickCount - recSince
         recState := "paused"
-        RecWriteControl("pause")
     } else if (recState = "paused") {
+        if !RecWriteControl("rec")
+            return RecControlFailed()
         recSince := A_TickCount
         recState := "rec"
-        RecWriteControl("rec")
     }
     RecUpdatePill()
 }
@@ -130,7 +136,7 @@ RecPauseToggle(*) {
 ; ---------------- 시작 ----------------
 RecStart(area) {
     global recState, recPid, recOut, recControl, recStatus, recRect, recElapsed, recSince
-    global recMic, recSys, recFps, REC_POLL_MS
+    global recMic, recSys, recFps, recQuality, REC_POLL_MS
     if !RecEnginePaths(&ffmpeg, &helper)
         return
     rect := area ? RecPickArea() : RecMonitorRect()
@@ -154,7 +160,7 @@ RecStart(area) {
     try FileDelete(recStatus)
     args := '"--ffmpeg=' ffmpeg '" "--out=' recOut '" "--control=' recControl '" "--status=' recStatus '"'
         . ' "--log=' tmp '.log" --x=' rect.x ' --y=' rect.y ' --w=' rect.w ' --h=' rect.h
-        . ' --fps=' recFps ' --mic=' (recMic ? 1 : 0) ' --sys=' (recSys ? 1 : 0) ' --parent=' ProcessExist()
+        . ' --fps=' recFps ' --quality=' recQuality ' --mic=' (recMic ? 1 : 0) ' --sys=' (recSys ? 1 : 0) ' --parent=' ProcessExist()
     try Run('"' helper '" ' args, A_ScriptDir, "Hide", &recPid)
     catch as err {
         MsgBox("녹화 도우미를 실행하지 못했습니다.`n`n(" err.Message ")", "ClassZoom — 녹화", "Icon!")
@@ -174,20 +180,33 @@ RecStop(*) {
     global recState, recElapsed, recSince
     if (recState != "rec" && recState != "paused")
         return
+    if !RecWriteControl("stop")
+        return RecControlFailed()
     if (recState = "rec")
         recElapsed += A_TickCount - recSince
     recState := "saving"
-    RecWriteControl("stop")
     RecUpdatePill()
 }
 
+RecControlFailed() {
+    TrayTip("녹화 도우미에 명령을 전하지 못했습니다. 한 번 더 눌러 주세요.", "ClassZoom — 녹화", "Icon!")
+}
+
+; 도우미가 제어 파일을 읽는 순간과 겹치면 쓰기가 실패할 수 있다. 예전에는 그 한 번을 조용히 버려서
+; 일시정지·정지가 먹지 않는 일이 있었다. 이제는 쓰고 다시 읽어 맞을 때까지 잠깐씩 되풀이한다.
 RecWriteControl(cmd) {
     global recControl
-    try {
-        f := FileOpen(recControl, "w", "UTF-8-RAW")
-        f.Write(cmd)
-        f.Close()
+    loop 40 {
+        try {
+            f := FileOpen(recControl, "w", "UTF-8-RAW")
+            f.Write(cmd)
+            f.Close()
+            if (Trim(FileRead(recControl, "UTF-8")) = cmd)
+                return true
+        }
+        Sleep(25)
     }
+    return false
 }
 
 ; 도우미가 적는 상태를 읽고, 경과 시간을 갱신한다
