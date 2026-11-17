@@ -9,7 +9,7 @@
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
 ;@Ahk2Exe-SetDescription ClassZoom - 라이브 줌 / 마우스 하이라이트 / 드로잉 / 화면 녹화
-;@Ahk2Exe-SetVersion 1.3.0
+;@Ahk2Exe-SetVersion 1.3.1
 ;@Ahk2Exe-SetCopyright © 2026 송동석 (Songpro / Dustin). MIT License
 ;@Ahk2Exe-SetCompanyName Songpro
 
@@ -57,7 +57,7 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.3.0"
+APP_VERSION := "1.3.1"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
@@ -2990,8 +2990,8 @@ PulseArrowRender(a, sc) {
     x2 := a.x2 - bx, y2 := a.y2 - by
     x1 := x2 + (a.x1 - a.x2) * sc, y1 := y2 + (a.y1 - a.y2) * sc
     saved := activeDrawThickness ; 화살표 머리 크기가 굵기를 따른다 (ArrowGeometry)
-    ; 흰 테두리를 먼저 굵게 그려 어떤 배경 위에서도 잘 보이게 한다
-    for layer in [[0xFFFFFFFF, th + 6], [0xFF000000 | a.color, th]] {
+    ; 펜 색 하나로만 그린다 (흰 테두리 없음 — 2026-11-17 사용자 요청)
+    for layer in [[0xFF000000 | a.color, th]] {
         activeDrawThickness := layer[2]
         pPen := 0
         DllCall("gdiplus\GdipCreatePen1", "uint", layer[1], "float", layer[2], "int", 2, "ptr*", &pPen)

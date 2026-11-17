@@ -34,8 +34,8 @@ import QuartzCore
         g.anchorPoint = CGPoint(x: b.x / max(1, g.bounds.width), y: b.y / max(1, g.bounds.height))
         g.position = b
         let parts = arrowParts(a, b, width: w)
-        // 흰 테두리를 먼저 굵게 그려 어떤 배경에서도 잘 보이게 한다
-        for (color, extra) in [(NSColor.white.cgColor, CGFloat(6)), (cgColor(rgb), CGFloat(0))] {
+        // 펜 색 하나로만 그린다 (흰 테두리 없음 — Windows와 같음)
+        for (color, extra) in [(cgColor(rgb), CGFloat(0))] {
             let shaft = CAShapeLayer()
             let path = CGMutablePath()
             path.move(to: parts.shaft[0]); path.addLine(to: parts.shaft[parts.shaft.count - 1])
