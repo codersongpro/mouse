@@ -80,6 +80,7 @@ jobs:
       # 녹화 도우미: .NET Framework 4의 C# 컴파일러(Windows에 기본 포함)로 빌드한다
       - name: Build recorder helper
         run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
           $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
           & $csc /nologo /target:winexe /optimize+ /out:dist\classzoom-rec.exe windows\recorder\ClassZoomRec.cs
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path dist\classzoom-rec.exe)) { throw "Recorder build failed" }
