@@ -140,6 +140,7 @@ jobs:
           if (-not (Test-Path $out)) { Write-Host "::warning::Smoke test produced no video"; exit 1 }
           Get-Item $out | Format-List Name, Length
           & dist\ffmpeg.exe -hide_banner -i $out 2>&1 | Select-String 'Duration|Stream'
+          exit 0 # 위 ffmpeg -i는 출력 파일이 없어 늘 1로 끝난다 (정보만 본다)
 
       - name: Package zip
         id: pkg
