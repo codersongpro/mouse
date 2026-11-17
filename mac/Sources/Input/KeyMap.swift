@@ -19,14 +19,17 @@ enum KeyMap {
     static let letters: [Int] = [12, 13, 14, 15, 0, 1]   // Q W E R A S
     static let edits: [Int] = [51, 117, escCode]         // delete, 앞으로 지우기, Esc
 
-    // 드로잉 묶음: 지금 53개
+    // 드로잉 묶음: 지금 92개. 오른쪽 ⌥를 누르는 동안 드로잉(DrawSession.holdBegin)에서도 같은 키를 쓰도록
+    // 글자·숫자·지우기 키와 Z X C V는 ⌥가 붙은 조합도 함께 잡는다 (⌥가 붙은 글자가 앞 앱에 쳐지지 않게).
     static let drawKeys: [DrawKey] = {
         var k: [DrawKey] = []
         func add(_ code: Int, _ mods: Int = 0, release: Bool = false, repeats: Bool = false) {
             k.append(DrawKey(combo: .init(code: code, mods: mods), release: release, repeats: repeats))
         }
-        for c in digits + letters + edits { add(c) }
-        for c in [6, 7, 8] { add(c, release: true); add(c, shiftKey, release: true) }         // Z X C (⇧와 함께 눌러도)
+        for c in digits + letters + edits { add(c); add(c, optionKey) }
+        for c in [6, 7, 8, 9] {                                                              // Z X C V (⇧·⌥와 함께 눌러도)
+            for m in [0, shiftKey, optionKey, optionKey | shiftKey] { add(c, m, release: true) }
+        }
         for m in [0, shiftKey, optionKey, optionKey | shiftKey] { add(24, m, repeats: true) } // = +  (⌥: 지우개)
         for c in [27, 69, 78] { add(c, repeats: true); add(c, optionKey, repeats: true) }     // - 키패드+ 키패드-
         for c in [123, 124] { add(c, repeats: true); add(c, optionKey, repeats: true) }       // ← → 굵기 (⌥: 지우개) — Windows와 같음

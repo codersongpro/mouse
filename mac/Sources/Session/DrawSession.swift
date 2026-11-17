@@ -13,9 +13,10 @@ enum OffReason: String {
     case lock           // 화면 잠금·사용자 전환: Esc처럼 끈다 (D7)
     case settings       // 설정 창 열기: 남긴다 (우리 앱이 앞으로 나오므로 끈다)
     case quit           // 종료: 남긴다 (의미 없음)
+    case hold           // 오른쪽 ⌥를 뗌: 그린 것을 화면에 남기고 클릭만 통과시킨다 (holdEnd)
 
     // 그린 것과 칠판을 지우고 나가는가
-    var clearsInk: Bool { self != .hotkey && self != .settings && self != .quit }
+    var clearsInk: Bool { self != .hotkey && self != .settings && self != .quit && self != .hold }
 }
 
 // 드로잉 켜기·끄기의 순서를 지킨다. 그림·펜 상태는 DrawController가, 판(창)은 InkSurface가,
@@ -45,10 +46,45 @@ enum OffReason: String {
 
     func toggle() { isOn ? turnOff(.hotkey) : turnOn() }
 
+    // ---------- 오른쪽 ⌥를 누르는 동안 드로잉 ----------
+    // F9 없이 오른쪽 ⌥를 누르고 있는 동안만 드로잉이 켜진다. 그 사이 드로잉 키(V 강조 화살표, C 화살표, ⌃ 네모, 숫자 색 …)도
+    // 그대로 쓴다. 떼면 드로잉이 꺼지지만 그린 것과 강조 화살표는 화면에 남고 클릭만 아래 앱으로 통과한다(pinned).
+    // 지우기: 오른쪽 ⌥ + delete 또는 + esc. 왼쪽 ⌥는 그대로 지우개다. 설정 › 드로잉에서 끌 수 있다.
+    // 판은 키 창이 아니라 수식키 알림이 오지 않으므로 15Hz로 키 상태만 읽는다 (권한 불필요, 거의 공짜).
+    private(set) var holdActive = false
+    private(set) var pinned = false
+    private var holdWaitRelease = false
+    private var holdTimer: Timer?
+
+    func setHoldEnabled(_ on: Bool) {
+        if on, holdTimer == nil {
+            let t = Timer(timeInterval: 1.0 / 15, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.holdTick() } }
+            RunLoop.main.add(t, forMode: .common)
+            holdTimer = t
+        } else if !on {
+            holdTimer?.invalidate(); holdTimer = nil
+        }
+    }
+
+    private func holdTick() {
+        let down = ModifierWatch.rightOptionDown()
+        if holdWaitRelease { if !down { holdWaitRelease = false }; return }
+        if down, !holdActive, !isOn {
+            holdActive = true
+            controller.holdRightOption = true
+            turnOn()
+            if !isOn { holdActive = false; controller.holdRightOption = false; holdWaitRelease = true }
+        } else if !down, holdActive {
+            if NSEvent.pressedMouseButtons & 1 != 0 { return } // 긋는 도중이면 손을 뗀 뒤에 끈다
+            turnOff(.hold)
+        }
+    }
+
     func turnOn() {
         guard !isOn else { return }
         controller.config = makeConfig()
-        controller.resetTemporaries()
+        // 오른쪽 ⌥로 이어 쓰는 동안(그림이 남아 있는 동안)은 고른 색·펜을 그대로 둔다
+        if !(holdActive && pinned) { controller.resetTemporaries() }
         controller.expireUndoIfNeeded()
         surface.prepare()
         willTurnOn()
@@ -60,6 +96,7 @@ enum OffReason: String {
             return
         }
         state.drawOn = true
+        if pinned { surface.setPassThrough(false); pinned = false } // 남겨 둔 그림 위에 다시 그린다
         surface.show() // 앱을 앞으로 부르지 않는다 — 발표 앱이 앞에 그대로 있다
         controller.begin()
         startWatching()
@@ -73,8 +110,19 @@ enum OffReason: String {
         // 드로잉·막기 키 단축키를 반드시 푼다 (안 풀리면 시스템 전체에서 그 글자를 못 친다)
         let freed = keys.unregisterAll(lingerEsc: reason == .esc)
         state.drawOn = false
-        surface.hide()
-        controller.end()
+        if reason == .hold {
+            // 그린 것과 강조 화살표는 화면에 남기고 클릭만 아래 앱으로 통과
+            surface.setPassThrough(true)
+            pinned = true
+            holdActive = false
+            controller.end(keepPulse: true)
+        } else {
+            surface.hide()
+            pinned = false
+            if holdActive { holdActive = false; holdWaitRelease = true } // ⌥를 누른 채 Esc 등으로 껐으면 뗄 때까지 다시 켜지 않는다
+            controller.end()
+        }
+        controller.holdRightOption = false
         SystemCursor.show(.board)
         NSCursor.arrow.set()
         Log.log("DRAW", "off reason=\(reason.rawValue) keysFreed=\(freed.removed) errors=\(freed.errors) "

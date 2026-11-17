@@ -316,6 +316,7 @@ import Combine
         if now.draw != applied.draw { draw.applySettings() }
         applied = now
         state.widgetVisible = Settings.shared.showWidget
+        draw.setHoldEnabled(Settings.shared.drawRightOptionHold) // 오른쪽 ⌥를 누르는 동안 드로잉
     }
 
     func toggleSpotlightOffIfOn() { if state.spotOn { toggleSpotlight() } }

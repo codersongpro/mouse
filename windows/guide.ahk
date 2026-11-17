@@ -54,7 +54,7 @@ ShowUsageGuide(*) {
         [ICON_SPOT_DARK_PATH, "마우스 하이라이트", HotkeyText(hotkeyCombos["Spotlight"])
             , "커서 주위를 노란 원으로 강조합니다. 클릭하면 원이 오므라듭니다."],
         [ICON_DRAW_DARK_PATH, "드로잉", HotkeyText(hotkeyCombos["Draw"])
-            , "드래그해서 그립니다. Esc를 누르면 지우고 끕니다."],
+            , "드래그해서 그립니다. Caps Lock을 누르고 있는 동안에도 그려집니다. Esc는 지우고 끄기."],
         [ICON_ZOOM_DARK_PATH, "라이브 줌", HotkeyText(hotkeyCombos["Zoom"])
             , "누를 때마다 1단계 → 2단계 → 3단계 → 끄기. 영상도 그대로 움직입니다."],
         [ICON_REC_PATH, "화면 녹화", HotkeyText(hotkeyCombos["Record"])

@@ -41,7 +41,7 @@ struct UsageGuideView: View {
             VStack(alignment: .leading, spacing: 10) {
                 row("icon_zoom_color", "라이브 줌", "\(key("Zoom")) · \(key("ZoomAlt"))", "누를 때마다 1단계 → 2단계 → 3단계 → 끄기. 화면은 고정되고 커서만 움직입니다.")
                 row("icon_spotlight_color", "마우스 하이라이트", "\(key("Spotlight")) · \(key("SpotlightAlt"))", "커서 주위를 노란 원으로 밝히고, 클릭하면 원이 오므라듭니다.")
-                row("icon_draw_color", "드로잉", "\(key("Draw")) · \(key("DrawAlt"))", "화면 위에 그립니다. esc를 누르면 지우고 끕니다.")
+                row("icon_draw_color", "드로잉", "\(key("Draw")) · \(key("DrawAlt"))", "화면 위에 그립니다. 오른쪽 ⌥를 누르고 있는 동안에도 그려집니다. esc는 지우고 끄기.")
                 row("icon_record_color", "화면 녹화", "\(key("Record")) · \(key("RecordAlt"))", "3·2·1 뒤 녹화하고 다시 누르면 동영상 › ClassZoom 폴더에 저장합니다.")
                 row("icon_settings_color", "설정", "위젯 버튼", "색·굵기·확대 배율·녹화 소리·단축키를 바꿉니다.")
             }
@@ -50,7 +50,7 @@ struct UsageGuideView: View {
                 section("라이브 줌 중", [("⌃ + 휠", "단계 올리기 · 내리기"), ("esc", "확대 끄기"), ("가장자리로", "그쪽으로 화면 이동")])
                 section("녹화", [(key("RecordPause"), "일시정지 · 계속"), (key("RecordArea"), "영역 골라 녹화"), ("표시창", "일시정지 · 정지 버튼")])
             }
-            section("드로잉 중", [("⌃ / ⇧ + 끌기", "네모 / 원"), ("Z / X / C + 끌기", "직선 / 물결 / 화살표"), ("V + 끌기", "강조 화살표"), ("1 ~ 9, 0", "색 바꾸기, 기본 색"), ("⌥ + 끌기", "지우개"), ("⌘Z / delete", "되돌리기 / 전부 지우기")])
+            section("드로잉 중", [("오른쪽 ⌥ + 끌기", "F9 없이 바로 (떼면 그림은 남음)"), ("⌃ / ⇧ + 끌기", "네모 / 원"), ("Z / X / C + 끌기", "직선 / 물결 / 화살표"), ("V + 끌기", "강조 화살표"), ("1 ~ 9, 0", "색 바꾸기, 기본 색"), ("⌥ + 끌기", "지우개"), ("⌘Z / delete", "되돌리기 / 전부 지우기")])
             Text("라이브 줌과 화면 녹화는 처음 쓸 때 화면 기록 권한을 묻습니다. 시스템 설정 › 개인정보 보호 및 보안 › 화면 및 시스템 오디오 녹화에서 ClassZoom을 켜 주세요.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {

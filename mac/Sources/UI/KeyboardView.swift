@@ -75,7 +75,7 @@ enum KeyboardLayout {
             + plain("BNM,./") + [shiftR]
         // 맨 아래 줄: ⌃ = 네모, ⌥ = 지우개 (끌면서 함께 누르는 키)
         let r5: [Cap] = [mod("fn"), Cap(label: "control", role: "네모", bar: .rect), Cap(label: "option", role: "지우개", bar: .eraser), mod("command", 1.25),
-                         mod("space", 5), mod("command", 1.25), Cap(label: "option", role: "지우개", bar: .eraser),
+                         mod("space", 5), mod("command", 1.25), Cap(label: "option", role: "누르는 동안 드로잉", bar: .line),
                          Cap(label: "←", role: "가늘게"),
                          Cap(label: "", active: false, height: 1, subs: [Cap(label: "↑", role: "진하게", height: 0.5), Cap(label: "↓", role: "연하게", height: 0.5)]),
                          Cap(label: "→", role: "굵게")]
@@ -249,6 +249,7 @@ struct KeyboardView: View {
             }
             HStack(alignment: .top, spacing: 12) {
                 GuideCard(title: "마우스로 그리기", dot: Color(red: 0.25, green: 0.56, blue: 0.95), rows: [
+                    (["오른쪽 ⌥", "누른 채", "드래그"], "F9 없이 바로 그리기"),
                     (["드래그"], "자유선 그리기"),
                     (["⌃", "+", "드래그"], "네모"),
                     (["⇧", "+", "드래그"], "원"),

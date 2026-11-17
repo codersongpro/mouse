@@ -58,6 +58,7 @@ enum PenKind { case normal, laser, rainbow }
     var mouse: CGPoint = .zero
     var mouseInside = true      // 포인터 아래가 판인가 (위젯·캡처 화면 위면 false → 화살표를 보인다)
     var optionHeld = false      // ⌥를 누르고 있는가 → 지우개 링 (ModifierWatch가 읽는다)
+    var holdRightOption = false // 오른쪽 ⌥를 누르는 동안 드로잉 중: 그때 ⌥는 지우개가 아니다 (왼쪽 ⌥만 지우개)
     let watch = ModifierWatch()
     private var lastCheckedMouse = CGPoint(x: -1e9, y: -1e9)
 
@@ -81,7 +82,7 @@ enum PenKind { case normal, laser, rainbow }
     func begin() {
         mouse = NSEvent.mouseLocation
         mouseInside = true
-        optionHeld = ModifierWatch.optionDown()
+        optionHeld = eraserOptionDown()
         SystemCursor.hide(.board)
         surface.invalidateAll() // 지난번 자리에 남은 동그라미까지 지운다
         updateCursor()
@@ -90,12 +91,13 @@ enum PenKind { case normal, laser, rainbow }
     }
 
     // 끄는 자리: 살핌을 멈추고 커서 상태를 되돌린다
-    func end() {
+    func end(keepPulse: Bool = false) {
         watch.stop()
+        if !keepPulse { pulse.clear() } // 강조 화살표도 드로잉과 함께 사라진다 (오른쪽 ⌥를 뗐을 때는 남긴다)
+        pulseDrag = false
         ignoreRightUp = false; ignoreLeftUp = false
         optionHeld = false
         mouseInside = true
-        pulse.clear(); pulseDrag = false // 강조 화살표도 드로잉과 함께 사라진다
         lastCheckedMouse = CGPoint(x: -1e9, y: -1e9)
     }
 
@@ -125,7 +127,12 @@ enum PenKind { case normal, laser, rainbow }
     }
 
     // ⌥만 눌러도 지우개 링, 떼면 붓 동그라미 (판이 키 창이 아니라 flagsChanged가 오지 않으므로 직접 읽는다)
-    func refreshOption(_ held: Bool = ModifierWatch.optionDown()) {
+    // 지우개로 쓰는 ⌥가 눌려 있는가 (오른쪽 ⌥로 드로잉 중이면 왼쪽 ⌥만 본다)
+    func eraserOptionDown() -> Bool { holdRightOption ? ModifierWatch.leftOptionDown() : ModifierWatch.optionDown() }
+    func optionErases(_ f: NSEvent.ModifierFlags) -> Bool { holdRightOption ? ModifierWatch.leftOptionDown() : f.contains(.option) }
+
+    func refreshOption(_ held: Bool? = nil) {
+        let held = held ?? eraserOptionDown()
         guard held != optionHeld else { return }
         optionHeld = held
         updateCursor()
@@ -242,7 +249,7 @@ enum PenKind { case normal, laser, rainbow }
         activePen = pen
         activeLaserRainbow = pen == .laser && rainbowColor
         if right { rightDown = true }
-        if right || e.modifierFlags.contains(.option) {
+        if right || optionErases(e.modifierFlags) {
             // 지우개: 오른쪽 버튼으로 문지르기 (트랙패드에서는 ⌥ Option을 누른 채 끌기)
             erasing = true
             updateCursor()

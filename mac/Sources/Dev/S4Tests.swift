@@ -11,7 +11,7 @@ import Carbon
         // ---- 키 표 ----
         let draw = KeyMap.drawKeys.map(\.combo)
         let block = KeyMap.blockKeys(excluding: Set(appCombos))
-        check("키 표: 드로잉 키 53개, 서로 겹치지 않음", draw.count == 53 && Set(draw).count == 53, "\(draw.count)개")
+        check("키 표: 드로잉 키 92개, 서로 겹치지 않음", draw.count == 92 && Set(draw).count == 92, "\(draw.count)개")
         check("키 표: 막기 키에 ⌘·⌃ 조합이 없음 (캡처·Spotlight·데스크톱 전환을 지킴)",
               !block.contains { $0.mods & (cmdKey | controlKey) != 0 })
         check("키 표: 막기 키와 드로잉 키·앱 키가 겹치지 않고, 막기 키끼리도 겹치지 않음",

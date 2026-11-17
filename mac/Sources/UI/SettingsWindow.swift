@@ -76,7 +76,7 @@ enum SettingsLayout {
         for r in drawKeys { ids.insert(r.color); ids.insert(r.opacity); if let s = r.step { ids.insert(s) } }
         ids.formUnion(widget.fields.map(\.id)); ids.insert(widgetShow); ids.insert(trayShow)
         ids.formUnion(zoom.fields.map(\.id)); ids.insert(zoomSmooth)
-        ids.formUnion(record.fields.map(\.id)); ids.insert(recMic); ids.insert(recSys); ids.insert("Record.Quality"); ids.insert("Record.AskQuality")
+        ids.formUnion(record.fields.map(\.id)); ids.insert(recMic); ids.insert(recSys); ids.insert("Record.Quality"); ids.insert("Record.AskQuality"); ids.insert("Draw.RightOptionHold")
         return ids
     }
 }
@@ -533,6 +533,10 @@ struct SettingsView: View {
     // ---- 드로잉 ----
     private var drawing: some View {
         Page {
+            Card(title: "오른쪽 ⌥를 누르는 동안 드로잉", toggle: flagBinding("Draw.RightOptionHold")) {
+                Text("F9 없이 오른쪽 ⌥(option)를 누른 채 끌면 바로 그립니다. 떼면 드로잉이 꺼지고 그린 것은 화면에 남습니다. 오른쪽 ⌥ + V 끌기 = 강조 화살표, 지우기 = 오른쪽 ⌥ + delete. 왼쪽 ⌥는 그대로 지우개입니다.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
             GroupBoxView(g: SettingsLayout.draw)
             Card(title: "숫자키 · 칠판 (색, 진하기 5~100%, 숫자키 굵기 1~\(STEP_MAX)단계)") {
                 VStack(spacing: 8) {

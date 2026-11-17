@@ -27,10 +27,10 @@ extension DrawController {
         case 13: board = 1; surface.invalidateAll(); updateCursor()        // W
         case 14: board = 2; surface.invalidateAll(); updateCursor()        // E
         case 15: board = 3; surface.invalidateAll(); updateCursor()        // R
-        case 24, 69: adjustSize(+1, eraser: rightDown || optionHeld || f.contains(.option)) // = + (키패드 +)
-        case 27, 78: adjustSize(-1, eraser: rightDown || optionHeld || f.contains(.option)) // - (키패드 -)
-        case 124: adjustSize(+1, eraser: rightDown || optionHeld || f.contains(.option))    // → (= 와 같음)
-        case 123: adjustSize(-1, eraser: rightDown || optionHeld || f.contains(.option))    // ← (− 와 같음)
+        case 24, 69: adjustSize(+1, eraser: rightDown || optionHeld || optionErases(f)) // = + (키패드 +)
+        case 27, 78: adjustSize(-1, eraser: rightDown || optionHeld || optionErases(f)) // - (키패드 -)
+        case 124: adjustSize(+1, eraser: rightDown || optionHeld || optionErases(f))    // → (= 와 같음)
+        case 123: adjustSize(-1, eraser: rightDown || optionHeld || optionErases(f))    // ← (− 와 같음)
         case 126: stepAlpha(1); showAlpha()                                                 // ↑ (휠 위로 한 칸과 같음)
         case 125: stepAlpha(-1); showAlpha()                                                // ↓
         default:
@@ -52,7 +52,7 @@ extension DrawController {
     }
 
     private func modsText(_ f: NSEvent.ModifierFlags) -> String {
-        let s = (f.contains(.control) ? "⌃" : "") + (f.contains(.option) ? "⌥" : "") + (f.contains(.shift) ? "⇧" : "") + (f.contains(.command) ? "⌘" : "")
+        let s = (f.contains(.control) ? "⌃" : "") + (optionErases(f) ? "⌥" : "") + (f.contains(.shift) ? "⇧" : "") + (f.contains(.command) ? "⌘" : "")
         return s.isEmpty ? "-" : s
     }
 

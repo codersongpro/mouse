@@ -223,6 +223,11 @@ final class InkView: NSView {
     }
     private(set) var lastRebuildMS = 0.0
 
+    // 오른쪽 ⌥를 떼었을 때: 판을 그대로 보이게 두고 클릭만 아래 앱으로 통과시킨다 (다시 켜면 되돌린다)
+    func setPassThrough(_ on: Bool) {
+        for w in windows { w.ignoresMouseEvents = on }
+    }
+
     // 끄면 그림(바닥 그림·획 그림·화면 그림)을 모두 버린다. 선 목록만 남는다.
     func hide() {
         isShown = false

@@ -11,6 +11,9 @@ import AppKit
 
     // ⌥가 지금 눌려 있는가
     nonisolated static func optionDown() -> Bool { CGEventSource.flagsState(.combinedSessionState).contains(.maskAlternate) }
+    // 왼쪽·오른쪽 ⌥를 따로 (키 자리 58 = 왼쪽, 61 = 오른쪽). 오른쪽 ⌥는 "누르는 동안 드로잉", 왼쪽 ⌥는 지우개다.
+    nonisolated static func leftOptionDown() -> Bool { CGEventSource.keyState(.combinedSessionState, key: 58) }
+    nonisolated static func rightOptionDown() -> Bool { CGEventSource.keyState(.combinedSessionState, key: 61) }
 
     func start() {
         guard timer == nil else { return }

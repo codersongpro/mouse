@@ -54,6 +54,7 @@ final class Settings: ObservableObject {
     @Published var recFps: Double = 30
     @Published var recQuality: Double = 1 // 0 720p · 1 1080p(기본) · 2 원본 해상도
     @Published var recAskQuality = true // 녹화할 때마다 화질을 묻는다
+    @Published var drawRightOptionHold = true // 오른쪽 ⌥를 누르는 동안 드로잉
     var widgetX: Double? = nil
     var widgetY: Double? = nil
     // [Hotkeys]: AHK 표기 그대로 든다 (Platform/HotkeyNotation.swift가 읽는다)
