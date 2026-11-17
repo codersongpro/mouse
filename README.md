@@ -12,7 +12,7 @@
 2. 바탕화면이나 문서 폴더에 압축을 풀고 `classzoom.exe`를 실행합니다.
 3. 파란 "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누릅니다 (전자서명이 없는 개인 제작 프로그램에 늘 뜨는 안내입니다).
 
-zip 안에는 `classzoom.exe`, 녹화용 `classzoom-rec.exe`·`ffmpeg.exe`, `사용안내.txt`, `LICENSE.txt`, `licenses/`(FFmpeg LGPL 라이선스)가 들어 있습니다. 모두 같은 폴더에 두세요.
+zip 안에는 `classzoom.exe`, `사용안내.txt`, `LICENSE.txt`, `licenses/`(FFmpeg LGPL 라이선스)가 들어 있습니다. **실행 파일은 `classzoom.exe` 하나**이고, 녹화 엔진(FFmpeg·녹화 도우미)은 그 안에 들어 있다가 처음 녹화할 때 `%LOCALAPPDATA%\ClassZoom\engine`에 한 번 꺼내집니다.
 
 처음 실행하면 **사용 방법 안내 창**이 뜹니다(위젯 버튼과 단축키 정리). "다음부터 보지 않기"를 체크하면 다음 실행부터 뜨지 않고, 트레이 메뉴 **사용 방법**이나 설정 → 일반 탭의 **사용 방법 보기**로 언제든 다시 열 수 있습니다.
 

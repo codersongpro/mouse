@@ -77,16 +77,6 @@ jobs:
           Get-Content validate.log -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0) { throw "Script validation failed ($($p.ExitCode))" }
 
-      - name: Compile exe
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          $out = Join-Path $PWD 'dist/classzoom.exe'
-          $p = Start-Process $env:AHK2EXE -ArgumentList '/in', 'classzoom.ahk', '/out', "`"$out`"", '/base', "`"$env:AHK_EXE`"", '/silent', 'verbose' `
-            -WorkingDirectory windows -Wait -PassThru -NoNewWindow -RedirectStandardOutput compile.log
-          Get-Content windows/compile.log, compile.log -ErrorAction SilentlyContinue
-          if ($p.ExitCode -ne 0 -or -not (Test-Path $out)) { throw "Compile failed ($($p.ExitCode))" }
-          Get-Item $out | Format-List Name, Length, VersionInfo
-
       # 녹화 도우미: .NET Framework 4의 C# 컴파일러(Windows에 기본 포함)로 빌드한다
       - name: Build recorder helper
         run: |
@@ -122,6 +112,19 @@ jobs:
           $enc | ForEach-Object { Write-Host $_ }
           "asset=$($asset.name)" >> $env:GITHUB_ENV
 
+      # 녹화 도우미와 FFmpeg을 exe 안에 넣는다 (FileInstall이 windows\engine\에서 읽는다) — 사용자는 exe 하나만 받는다
+      - name: Compile exe
+        run: |
+          New-Item -ItemType Directory -Force windows\engine | Out-Null
+          Copy-Item dist\classzoom-rec.exe, dist\ffmpeg.exe windows\engine\
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $out = Join-Path $PWD 'dist/classzoom.exe'
+          $p = Start-Process $env:AHK2EXE -ArgumentList '/in', 'classzoom.ahk', '/out', "`"$out`"", '/base', "`"$env:AHK_EXE`"", '/silent', 'verbose' `
+            -WorkingDirectory windows -Wait -PassThru -NoNewWindow -RedirectStandardOutput compile.log
+          Get-Content windows/compile.log, compile.log -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0 -or -not (Test-Path $out)) { throw "Compile failed ($($p.ExitCode))" }
+          Get-Item $out | Format-List Name, Length, VersionInfo
+
       # 실제로 5초 녹화해 본다 (빌드 서버에는 소리 장치가 없어 화면만 녹화된다)
       - name: Smoke test recording
         continue-on-error: true
@@ -152,8 +155,6 @@ jobs:
           $dir = 'dist/ClassZoom'
           New-Item -ItemType Directory -Force $dir | Out-Null
           Move-Item dist/classzoom.exe $dir
-          Move-Item dist/classzoom-rec.exe $dir
-          Move-Item dist/ffmpeg.exe $dir
           Copy-Item windows/사용안내.txt $dir
           Copy-Item LICENSE "$dir/LICENSE.txt"
           # FFmpeg은 LGPL 2.1로 배포된다: 라이선스 전문과 출처를 함께 넣는다
@@ -166,7 +167,7 @@ jobs:
           $ffver
           Build: $env:asset  (https://github.com/BtbN/FFmpeg-Builds)
           Source code: https://ffmpeg.org/download.html  /  https://github.com/FFmpeg/FFmpeg
-          ffmpeg.exe는 수정하지 않은 그대로이며, 같은 이름의 다른 FFmpeg 빌드로 바꿔 써도 됩니다.
+          ffmpeg.exe는 수정하지 않은 그대로 classzoom.exe 안에 들어 있다가 처음 녹화할 때 %LOCALAPPDATA%\ClassZoom\engine에 꺼내집니다. classzoom.exe 옆에 다른 FFmpeg 빌드(ffmpeg.exe)와 classzoom-rec.exe를 두면 그것을 대신 씁니다.
           "@ -replace '(?m)^\s+', '' | Set-Content "$dir/licenses/THIRD-PARTY.txt" -Encoding utf8
           $zip = "dist/ClassZoom-$v.zip"
           Compress-Archive -Path $dir -DestinationPath $zip -Force

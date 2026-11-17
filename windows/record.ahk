@@ -9,8 +9,8 @@
 ;   3·2·1 카운트다운 뒤 시작하고, 끝나면 "동영상\ClassZoom" 폴더에 MP4로 저장한 뒤 폴더를 연다.
 ;
 ; 어떻게 하나
-;   실제 녹화는 exe 옆의 classzoom-rec.exe(도우미, windows\recorder\ClassZoomRec.cs)와
-;   ffmpeg.exe가 한다. 본체는 도우미를 숨겨 실행하고 "제어 파일"에 rec / pause / stop을 써서
+;   실제 녹화는 classzoom-rec.exe(도우미, windows\recorder\ClassZoomRec.cs)와 ffmpeg.exe가 한다.
+;   두 파일은 classzoom.exe 안에 들어 있다가 처음 녹화할 때 꺼낸다(RecEnginePaths). 본체는 도우미를 숨겨 실행하고 "제어 파일"에 rec / pause / stop을 써서
 ;   조종하며, 도우미가 "상태 파일"에 적는 recording / paused / saving / done / error를 읽는다.
 ;   카운트다운·녹화 표시창·영역 테두리는 SetWindowDisplayAffinity로 녹화(와 화면 캡처)에서 뺀다.
 ;   영역 테두리는 녹화 영역 바깥에 그려서, 혹시 빠지지 않더라도 영상에 들어가지 않는다.
@@ -59,6 +59,43 @@ RecSaveFolder() {
     return p "\ClassZoom"
 }
 
+;---------------- 녹화 엔진 (exe 하나로 배포) ----------------
+; 녹화 도우미(classzoom-rec.exe)와 FFmpeg(ffmpeg.exe)은 classzoom.exe 안에 들어 있다(FileInstall).
+; 처음 녹화할 때 한 번만 %LOCALAPPDATA%\ClassZoom\engine\<버전>\에 꺼내 쓰고, 다음부터는 꺼내 둔 것을 쓴다.
+; exe 옆에 두 파일이 있으면 그것을 먼저 쓴다 — 소스(.ahk)로 실행할 때, 또는 FFmpeg을 다른 빌드로 바꿔 쓰고 싶을 때.
+RecEnginePaths(&ffmpeg, &helper) {
+    global APP_VERSION
+    ffmpeg := A_ScriptDir "\ffmpeg.exe", helper := A_ScriptDir "\classzoom-rec.exe"
+    if (FileExist(ffmpeg) && FileExist(helper))
+        return true
+    if !A_IsCompiled {
+        MsgBox("소스로 실행할 때는 ffmpeg.exe와 classzoom-rec.exe를 classzoom.ahk 옆에 두어야 녹화됩니다.", "ClassZoom — 녹화", "Icon!")
+        return false
+    }
+    root := EnvGet("LOCALAPPDATA") "\ClassZoom\engine"
+    dir := root "\" APP_VERSION
+    ffmpeg := dir "\ffmpeg.exe", helper := dir "\classzoom-rec.exe"
+    if FileExist(dir "\ready")
+        return true
+    TrayTip("처음 한 번만 녹화 엔진을 준비합니다…", "ClassZoom", "Iconi")
+    try {
+        DirCreate(dir)
+        ; 아래 두 줄은 컴파일할 때 windows\engine\의 파일을 exe 안에 넣고, 실행할 때 꺼낸다
+        FileInstall("engine\ffmpeg.exe", ffmpeg, 1)
+        FileInstall("engine\classzoom-rec.exe", helper, 1)
+        FileAppend(APP_VERSION, dir "\ready") ; 다 꺼낸 뒤에만 표시 (중간에 끊기면 다음에 다시 꺼낸다)
+    } catch as err {
+        MsgBox("녹화 엔진을 준비하지 못했습니다.`n`n" dir "`n(" err.Message ")", "ClassZoom — 녹화", "Icon!")
+        return false
+    }
+    ; 예전 버전의 엔진은 지운다 (용량 정리)
+    loop files root "\*", "D"
+        if (A_LoopFileName != APP_VERSION)
+            try DirDelete(A_LoopFileFullPath, true)
+    TrayTip()
+    return true
+}
+
 ; ---------------- 단축키·버튼이 부르는 것 ----------------
 RecToggle(*) {
     global recState, recMode
@@ -94,13 +131,8 @@ RecPauseToggle(*) {
 RecStart(area) {
     global recState, recPid, recOut, recControl, recStatus, recRect, recElapsed, recSince
     global recMic, recSys, recFps, REC_POLL_MS
-    ffmpeg := A_ScriptDir "\ffmpeg.exe", helper := A_ScriptDir "\classzoom-rec.exe"
-    if (!FileExist(ffmpeg) || !FileExist(helper)) {
-        MsgBox("녹화에 필요한 파일이 classzoom.exe 옆에 없습니다.`n`n"
-            . "필요한 파일: ffmpeg.exe, classzoom-rec.exe`n`n"
-            . "내려받은 zip의 압축을 풀 때 들어 있던 파일을 모두 같은 폴더에 두세요.", "ClassZoom — 녹화", "Icon!")
+    if !RecEnginePaths(&ffmpeg, &helper)
         return
-    }
     rect := area ? RecPickArea() : RecMonitorRect()
     if !IsObject(rect)
         return

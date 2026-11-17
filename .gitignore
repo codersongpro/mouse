@@ -3,3 +3,4 @@ dist/
 windows/settings.ini
 windows/*.exe
 mac/build/
+windows/engine/
