@@ -78,44 +78,73 @@
   .chip b { color: var(--blue); }
   @media (max-width: 920px) { .hero .wrap { grid-template-columns: 1fr; } }
 
-  /* ---------- 화면 미리보기(그림) ---------- */
-  .screen { position: relative; border-radius: 18px; background: #0F172A; padding: 12px; box-shadow: 0 30px 60px -20px rgba(15,23,42,.45); }
-  .screen .bar { display: flex; gap: 6px; padding: 2px 4px 10px; }
-  .screen .bar i { width: 10px; height: 10px; border-radius: 50%; background: #334155; }
-  .slide { position: relative; aspect-ratio: 16/10; border-radius: 10px; overflow: hidden; background: #fff; }
-  .zoom-view { position: absolute; inset: 0; padding: 6% 7% 0; background: linear-gradient(#fff, #F8FAFC); }
-  .zt { font-weight: 800; font-size: clamp(16px, 2.4vw, 30px); letter-spacing: -0.02em; }
-  .zt span { font-weight: 600; color: var(--ink-3); font-size: .7em; }
-  .zbars { position: absolute; left: 10%; right: 10%; bottom: 0; height: 66%; display: flex; align-items: flex-end; gap: 9%; }
-  .zbars span { position: relative; flex: 1; border-radius: 14px 14px 0 0; background: var(--sky); }
-  .zbars span.hi { background: var(--blue); }
-  .zbars i { position: absolute; top: -1.6em; left: 0; right: 0; text-align: center; font-style: normal; font-weight: 800; font-size: clamp(12px, 1.6vw, 20px); color: var(--ink); }
-  .ring { position: absolute; left: 33%; top: 24%; width: 36%; }
-  .cursor { position: absolute; left: 62%; top: 44%; width: clamp(18px, 2.4vw, 28px); filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
-  .hl { position: absolute; left: 57%; top: 37%; width: 11%; aspect-ratio: 1; border-radius: 50%; background: rgba(250, 204, 21, .45); }
-  .recpill { position: absolute; right: 4%; top: 6%; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: var(--ink); color: #fff; font-weight: 700; font-size: clamp(10px, 1.1vw, 13px); }
+  /* ---------- 히어로 그림: 전자칠판으로 수업하는 장면 ----------
+     main.js가 .board의 data-step을 0→1→2→3으로 돌린다.
+     0 마우스 하이라이트로 짚기 · 1 드로잉으로 쓰기 · 2 라이브 줌으로 키우기 · 3 화면 녹화로 남기기
+     움직임을 줄이도록 설정한 기기에서는 마지막 장면(3)에 멈춰 둔다. */
+  .demo { position: relative; }
+  .board { position: relative; border-radius: 16px; background: #111827; padding: 12px 12px 18px; box-shadow: 0 30px 60px -20px rgba(15,23,42,.45); }
+  .board::after { content: ""; position: absolute; left: 50%; bottom: 5px; width: 18px; height: 5px; margin-left: -9px; border-radius: 3px; background: #374151; } /* 전원 표시 */
+  .stand { display: flex; justify-content: space-between; width: 46%; margin: 0 auto; }
+  .stand i { width: 10px; height: 26px; background: linear-gradient(#9CA3AF, #CBD5E1); border-radius: 0 0 4px 4px; }
+  .slide { position: relative; aspect-ratio: 16/10; border-radius: 6px; overflow: hidden; background: #fff; }
+  .lesson { position: absolute; inset: 0; background: linear-gradient(#fff, #F8FAFC); transform-origin: 50% 48%; transition: transform .9s cubic-bezier(.2,.8,.2,1); }
+  .lesson .tag { position: absolute; left: 7%; top: 7%; padding: 2px 10px; border-radius: 999px; background: var(--sky-l); color: var(--blue-d); font-weight: 700; font-size: clamp(9px, 1.1vw, 13px); }
+  .lesson h4 { position: absolute; left: 7%; top: 15%; font-size: clamp(15px, 2.3vw, 28px); letter-spacing: -0.02em; }
+  .frow { position: absolute; left: 7%; right: 7%; height: 13%; display: flex; align-items: center; gap: 3%; }
+  .frow b { width: 11%; text-align: center; font-size: clamp(13px, 2vw, 24px); }
+  .cells { flex: 1; height: 100%; display: flex; border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; }
+  .cells i { flex: 1; border-right: 2px solid var(--ink); }
+  .cells i:last-child { border-right: 0; }
+  .cells i.f { background: var(--blue); }
+  .cells.g i.f { background: #34D399; }
+  .r1 { top: 37%; } .r2 { top: 57%; }
+  .lesson .q { position: absolute; left: 7%; bottom: 9%; color: var(--ink-2); font-weight: 600; font-size: clamp(11px, 1.5vw, 18px); }
+  .ink { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .ink path { fill: none; stroke: var(--red); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; }
+  .ink path.p2 { transition-delay: .55s; }
+  .hl { position: absolute; width: 13%; aspect-ratio: 1; border-radius: 50%; background: rgba(250,204,21,.42); transform: translate(-50%, -50%) scale(.6); opacity: 0; transition: opacity .3s, transform .3s, left .9s, top .9s; }
+  .cursor { position: absolute; width: clamp(16px, 2.2vw, 26px); filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); transition: left .9s cubic-bezier(.3,.7,.2,1), top .9s cubic-bezier(.3,.7,.2,1); }
+  .badge { position: absolute; left: 50%; top: 8%; transform: translateX(-50%); padding: 6px 14px; border-radius: 10px; background: var(--ink); color: #fff; font-weight: 700; font-size: clamp(10px, 1.2vw, 14px); white-space: nowrap; opacity: 0; transition: opacity .3s; }
+  .recpill { position: absolute; right: 4%; top: 6%; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: var(--ink); color: #fff; font-weight: 700; font-size: clamp(10px, 1.1vw, 13px); opacity: 0; transform: translateY(-6px); transition: opacity .3s, transform .3s; }
   .recpill i { width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
-  .widget span.rec { background: #FECACA; }
-  .badge { position: absolute; left: 66%; top: 58%; padding: 6px 12px; border-radius: 10px; background: var(--ink); color: #fff; font-weight: 700; font-size: clamp(11px, 1.2vw, 14px); white-space: nowrap; }
-  .minimap { position: absolute; left: 4%; bottom: 5%; width: 24%; padding: 6px 8px 8px; border-radius: 10px; background: rgba(255,255,255,.95); box-shadow: 0 6px 16px -6px rgba(0,0,0,.35); font-size: clamp(9px, 1vw, 12px); color: var(--ink-2); }
-  .mm { position: relative; margin-top: 4px; aspect-ratio: 16/10; border-radius: 6px; background: #F1F5F9; display: flex; align-items: flex-end; gap: 8%; padding: 0 10%; }
-  .mm span { flex: 1; background: var(--sky); border-radius: 2px 2px 0 0; }
-  .mm span:nth-child(3) { background: var(--blue); }
-  .mm .frame { position: absolute; left: 34%; top: 22%; width: 50%; height: 60%; border: 2px solid var(--red); border-radius: 4px; }
-  .widget { position: absolute; right: 4%; bottom: 5%; display: flex; gap: 6px; padding: 6px 8px; border-radius: 14px; background: #F2F2F2; box-shadow: 0 6px 16px -6px rgba(0,0,0,.35); }
-  .widget span { width: clamp(26px, 3vw, 36px); aspect-ratio: 1; border-radius: 10px; background: #fff; display: grid; place-items: center; }
-  .widget span.on { background: #BFDBFE; }
+  .widget { position: absolute; right: 3%; bottom: 4%; display: flex; gap: 5px; padding: 5px 7px; border-radius: 12px; background: #F2F2F2; box-shadow: 0 6px 16px -6px rgba(0,0,0,.35); }
+  .widget span { width: clamp(22px, 2.8vw, 34px); aspect-ratio: 1; border-radius: 9px; background: #fff; display: grid; place-items: center; transition: background .3s; }
   .widget img { width: 72%; }
+
+  /* 장면별 상태 */
+  .board .cursor { left: 30%; top: 72%; }
+  .board .hl { left: 45%; top: 44%; }
+  .board[data-step="0"] .cursor { left: 45%; top: 44%; }
+  .board[data-step="0"] .hl { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .board[data-step="0"] .w-spot,
+  .board[data-step="1"] .w-draw,
+  .board[data-step="2"] .w-zoom, .board[data-step="3"] .w-zoom { background: #BFDBFE; }
+  .board[data-step="3"] .w-rec { background: #FECACA; }
+  .board[data-step="1"] .cursor { left: 88%; top: 44%; }
+  .board:is([data-step="1"],[data-step="2"],[data-step="3"]) .ink path { opacity: 1; stroke-dashoffset: 0; transition: stroke-dashoffset .8s ease-in-out; }
+  .board[data-step="1"] .ink path.p2 { transition-delay: .55s; }
+  .board:is([data-step="2"],[data-step="3"]) .lesson { transform: scale(1.65); }
+  .board:is([data-step="2"],[data-step="3"]) .cursor { left: 60%; top: 40%; }
+  .board[data-step="2"] .badge { opacity: 1; }
+  .board[data-step="3"] .recpill { opacity: 1; transform: none; }
+
+  /* 그림 아래 단계 표시 (눌러서 그 장면으로) */
+  .demo-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 18px; padding: 0; list-style: none; }
+  .demo-steps button { width: 100%; padding: 8px 6px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font: inherit; font-size: 14px; font-weight: 700; color: var(--ink-3); cursor: pointer; transition: all .2s; }
+  .demo-steps button small { display: block; font-size: 12px; font-weight: 600; }
+  .demo-steps button[aria-pressed="true"] { border-color: var(--blue); background: var(--sky-l); color: var(--blue-d); }
+  .demo figcaption { margin-top: 10px; text-align: center; color: var(--ink-3); font-size: 13px; }
   @media (prefers-reduced-motion: no-preference) {
-    .cursor, .hl { animation: nudge 3.2s ease-in-out infinite; }
-    @keyframes nudge { 50% { transform: translate(-10px, 6px); } }
-    .recpill i { animation: blink 1.2s steps(2, start) infinite; }
+    .board[data-step="3"] .recpill i { animation: blink 1.2s steps(2, start) infinite; }
     @keyframes blink { to { visibility: hidden; } }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lesson, .cursor, .hl, .ink path, .badge, .recpill { transition: none !important; }
   }
   @media (max-width: 560px) {
     .cta .btn { width: 100%; justify-content: center; }
-    .badge { left: auto; right: 3%; top: 60%; }
-    .hl { display: none; }
+    .demo-steps { grid-template-columns: repeat(2, 1fr); }
   }
 
   /* ---------- 이럴 때 씁니다 ---------- */
@@ -223,38 +252,44 @@
         </div>
       </div>
 
-      <!-- 확대 중인 수업 화면 그림 -->
-      <div class="screen" role="img" aria-label="수업 슬라이드를 확대해 보여주는 ClassZoom 화면 예시">
-        <div class="bar"><i></i><i></i><i></i></div>
-        <div class="slide">
-          <!-- 2단계로 확대된 화면: 막대그래프 오른쪽 부분이 화면을 가득 채운다 -->
-          <div class="zoom-view">
-            <p class="zt">우리 반 독서량 <span>(권)</span></p>
-            <div class="zbars">
-              <span style="height:58%"><i>31</i></span>
-              <span class="hi" style="height:86%"><i>46</i></span>
-              <span style="height:52%"><i>28</i></span>
+      <!-- 전자칠판으로 수업하는 장면 (main.js가 장면을 돌린다) -->
+      <figure class="demo">
+        <div class="board js-demo" data-step="0" role="img" aria-label="전자칠판에 띄운 분수 수업 화면을 마우스 하이라이트로 짚고 드로잉으로 표시하고 라이브 줌으로 키운 뒤 화면 녹화로 남기는 장면">
+          <div class="slide">
+            <div class="lesson">
+              <span class="tag">3학년 수학</span>
+              <h4>분수의 크기 비교</h4>
+              <div class="frow r1"><b>3/4</b><span class="cells"><i class="f"></i><i class="f"></i><i class="f"></i><i></i></span></div>
+              <div class="frow r2"><b>2/3</b><span class="cells g"><i class="f"></i><i class="f"></i><i></i></span></div>
+              <p class="q">어느 쪽이 더 클까요?</p>
+              <!-- 드로잉: 3/4 줄에 동그라미, 질문 옆에 체크 -->
+              <svg class="ink" viewBox="0 0 160 100" aria-hidden="true">
+                <path pathLength="1" d="M14 41 C 30 33, 120 32, 140 39 C 150 44, 146 53, 132 54 C 100 57, 34 57, 16 52 C 6 49, 8 42, 22 38"/>
+                <path class="p2" pathLength="1" d="M70 87 l4 4 l8 -9"/>
+              </svg>
             </div>
-            <svg class="ring" viewBox="0 0 200 120" fill="none" aria-hidden="true"><ellipse cx="100" cy="60" rx="92" ry="52" stroke="#EF4444" stroke-width="7" stroke-linecap="round" stroke-dasharray="520 60"/></svg>
             <span class="hl" aria-hidden="true"></span>
             <svg class="cursor" viewBox="0 0 20 30" aria-hidden="true"><path d="M1 1 L1 25 L7 19 L11.5 28.5 L15.5 26.5 L11 17.5 L19 17.5 Z" fill="#fff" stroke="#1E293B" stroke-width="1.6" stroke-linejoin="round"/></svg>
             <span class="badge">확대 2단계 · 200%</span>
-            <span class="recpill"><i></i>녹화 중 01:23</span>
-          </div>
-          <!-- 원래 화면에서 어디를 키웠는지 -->
-          <div class="minimap" aria-hidden="true">
-            <b>원래 화면</b>
-            <div class="mm"><span style="height:30%"></span><span style="height:44%"></span><span style="height:66%"></span><span style="height:40%"></span><i class="frame"></i></div>
-          </div>
-          <div class="widget" aria-hidden="true">
-            <span><img src="/assets/spotlight.png" alt=""></span>
-            <span><img src="/assets/draw.png" alt=""></span>
-            <span class="on"><img src="/assets/zoom.png" alt=""></span>
-            <span class="rec"><img src="/assets/record.png" alt=""></span>
-            <span><img src="/assets/settings.png" alt=""></span>
+            <span class="recpill"><i></i><span class="js-rec-time">녹화 중 00:00</span></span>
+            <div class="widget" aria-hidden="true">
+              <span class="w-spot"><img src="/assets/spotlight.png" alt=""></span>
+              <span class="w-draw"><img src="/assets/draw.png" alt=""></span>
+              <span class="w-zoom"><img src="/assets/zoom.png" alt=""></span>
+              <span class="w-rec"><img src="/assets/record.png" alt=""></span>
+              <span><img src="/assets/settings.png" alt=""></span>
+            </div>
           </div>
         </div>
-      </div>
+        <div class="stand" aria-hidden="true"><i></i><i></i></div>
+        <ol class="demo-steps">
+          <li><button type="button" data-go="0" aria-pressed="true">짚고<small>마우스 하이라이트</small></button></li>
+          <li><button type="button" data-go="1" aria-pressed="false">쓰고<small>드로잉</small></button></li>
+          <li><button type="button" data-go="2" aria-pressed="false">키우고<small>라이브 줌</small></button></li>
+          <li><button type="button" data-go="3" aria-pressed="false">남기고<small>화면 녹화</small></button></li>
+        </ol>
+        <figcaption>전자칠판으로 분수 수업을 하는 장면</figcaption>
+      </figure>
     </div>
   </section>
 
