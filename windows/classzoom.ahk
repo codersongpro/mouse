@@ -8,9 +8,10 @@
 ; 컴파일된 exe는 이 아이콘을 파일 아이콘이자 트레이 아이콘으로 함께 사용한다.
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
-;@Ahk2Exe-SetDescription ClassZoom - 실시간 화면 확대 / 마우스 강조 / 화면 드로잉
-;@Ahk2Exe-SetVersion 1.2.0
-;@Ahk2Exe-SetCopyright ClassZoom (c) 2026 codersongpro. MIT License
+;@Ahk2Exe-SetDescription ClassZoom - 라이브 줌 / 마우스 하이라이트 / 드로잉 / 화면 녹화
+;@Ahk2Exe-SetVersion 1.2.1
+;@Ahk2Exe-SetCopyright © 2026 송동석 (Songpro / Dustin). MIT License
+;@Ahk2Exe-SetCompanyName Songpro
 
 Persistent()
 SetWinDelay(-1)
@@ -24,14 +25,31 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.2.0"
+APP_VERSION := "1.2.1"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
 ; ClassZoom은 codersongpro/mouse 저장소에서 배포한다.
 UPDATE_FILE_URL := "https://raw.githubusercontent.com/codersongpro/mouse/main/version.txt"
 RELEASES_URL := "https://github.com/codersongpro/mouse/releases/latest"
-AUTHOR_URL := "https://github.com/codersongpro/mouse" ; 설정 창의 홈페이지 링크
+AUTHOR_URL := "https://songpro.app" ; 설정 창의 홈페이지 링크
+
+; ---- 만든 사람 · 저작권 (설정 창 일반 탭, 사용 방법 창, 이용 안내에 쓴다) ----
+MAKER_NAME := "송동석 (Songpro / Dustin)"
+MAKER_ROLE := "AI Product Builder · Educator · Data Analyst"
+MAKER_SLOGAN := "즐거움은 더하고, 불편함은 덜고."
+MAKER_COPYRIGHT := "© 2026 송동석"
+
+ShowTermsNotice(owner := 0, *) {
+    global MAKER_NAME
+    MsgBox("ClassZoom © 2026 " MAKER_NAME "`n`n"
+        . "· MIT 라이선스로 배포하는 무료 프로그램입니다. 누구나 사용·복사·수정·배포할 수 있습니다.`n`n"
+        . "· 다시 배포할 때는 저작권 표시와 LICENSE 파일을 함께 넣어 주세요.`n`n"
+        . "· 이 프로그램은 있는 그대로 제공되며, 사용 중 생긴 문제에 대해 만든 사람은 책임지지 않습니다.`n`n"
+        . "· 개인정보를 수집하거나 외부로 보내지 않습니다. 인터넷은 설정 창을 열 때 새 버전을 확인하는 데에만 씁니다(버전 파일 1개 읽기).`n`n"
+        . "· 화면 녹화에는 FFmpeg(LGPL 2.1)을 씁니다. 라이선스는 zip의 licenses 폴더에 있습니다."
+        , "ClassZoom — 저작권 및 이용 안내", "Iconi" (owner ? " Owner" owner : ""))
+}
 updateReq := "", updateDeadline := 0, updateUrl := RELEASES_URL, lblUpdate := ""
 
 A_IconTip := "ClassZoom v" APP_VERSION " - 화면 확대 / 마우스 강조 / 화면 드로잉"
@@ -4099,38 +4117,45 @@ OpenSettingsWindow(*) {
     ; 탭 한가운데에 모아 둔다.
     ; "자동 실행"은 저장/불러오기 없이 그 자리에서 바로 레지스트리에 반영되므로, 체크 표시는
     ; 항상 IsRunAtStartup()으로 실제 상태를 다시 읽어서 보여준다.
-    chkStartup := settingsGui.AddCheckbox("x133 y240 w20 h20 " (IsRunAtStartup() ? "Checked" : ""), "")
-    settingsGui.AddText("x157 y241 w220", "Windows 시작 시 자동 실행")
+    ; 일반 탭: 위에서부터 도움말 → 시작 → 초기화 → 새 버전 → 만든 사람. 창 가운데(x=280)에 맞춘다.
+    btnGuide := settingsGui.AddButton("x180 y52 w200 h32", "사용 방법 보기")
+    btnGuide.OnEvent("Click", ShowUsageGuide)
+    chkStartup := settingsGui.AddCheckbox("x186 y104 w20 h20 " (IsRunAtStartup() ? "Checked" : ""), "")
+    settingsGui.AddText("x210 y105 w220", "Windows 시작 시 자동 실행")
     chkStartup.OnEvent("Click", (ctrl, *) => SetRunAtStartup(ctrl.Value))
 
-    ; 자주 누를 버튼이 아니고 되돌릴 수도 없어서, 다른 항목과 떨어뜨려 놓고 글자색만 연하게 한다
-    ; (배경색은 테마 버튼이라 바꿀 수 없다 — "프로그램 종료" 버튼과 같은 처지다).
-    btnGuide := settingsGui.AddButton("x140 y180 w200 h32", "사용 방법 보기")
-    btnGuide.OnEvent("Click", ShowUsageGuide)
-    btnResetAll := settingsGui.AddButton("x140 y312 w200 h32", "모든 설정값 초기화")
+    ; 자주 누를 버튼이 아니고 되돌릴 수도 없어서 글자색만 연하게 한다
+    btnResetAll := settingsGui.AddButton("x180 y144 w200 h32", "모든 설정값 초기화")
     btnResetAll.SetFont("c999999")
     btnResetAll.OnEvent("Click", (*) => ResetAllSettings())
-    lblResetAll := settingsGui.AddText("x22 y352 w436 Center", "색·굵기·위젯·단축키를 모두 처음 상태로 되돌립니다.")
+    lblResetAll := settingsGui.AddText("x22 y182 w516 Center", "색·굵기·위젯·단축키를 모두 처음 상태로 되돌립니다.")
     lblResetAll.SetFont("s9 c999999")
 
-    ; 문제를 알려줄 때 어느 버전인지 바로 말할 수 있도록, 눈에 띄지 않는 연한 글씨로 적어둔다.
-    ; 제작자 표시도 같이 둔다 — 수업 화면을 가리지 않으면서 찾으려는 사람은 확실히 볼 수 있는
-    ; 자리가 여기라서, 위젯이나 트레이 툴팁 대신 이곳을 골랐다. 탭 아래 가운데에 둔다.
-    ; +0x80 = SS_NOPREFIX. 이게 없으면 Text 컨트롤이 &를 단축키 표시용 기호로 삼아 먹어버려서
-    ; "A & B"가 "A  B"로 나온다 (뒤 글자에 밑줄만 그어진다).
-    lblVersion := settingsGui.AddText("x22 y500 w436 Center +0x80", "ClassZoom 버전 " APP_VERSION)
-    lblVersion.SetFont("s9 c999999")
-    ; 제작자 이름을 누르면 개인페이지가 열린다 (링크처럼 보이게 파란 밑줄 글씨)
-    lblAuthor := settingsGui.AddText("x22 y520 w436 Center", "ClassZoom 홈페이지")
-    lblAuthor.SetFont("s9 c0066CC underline")
-    lblAuthor.OnEvent("Click", (*) => Run(AUTHOR_URL))
-
     ; 새 버전 확인: 창을 열 때 읽은 최신 버전을 지금 버전 옆에 적는다(StartUpdateCheck).
-    ; 단추는 늘 GitHub 받는 곳을 연다 — 새 버전이 있으면 그 릴리스, 아니면 최신 릴리스.
-    lblUpdate := settingsGui.AddText("x22 y420 w436 Center +0x80", "현재 " APP_VERSION " · 최신 버전 확인 중…")
+    settingsGui.AddText("x40 y214 w480 h2 0x10")
+    lblUpdate := settingsGui.AddText("x22 y228 w516 Center +0x80", "현재 " APP_VERSION " · 최신 버전 확인 중…")
     lblUpdate.SetFont("s9 c666666")
-    btnDownload := settingsGui.AddButton("x180 y444 w120 h28", "받으러 가기")
+    btnDownload := settingsGui.AddButton("x220 y250 w120 h28", "받으러 가기")
     btnDownload.OnEvent("Click", (*) => Run(updateUrl))
+
+    ; 만든 사람 · 저작권 (MAKER_* 는 guide.ahk와 같이 쓴다)
+    settingsGui.AddText("x40 y296 w480 h2 0x10")
+    lblMakerHead := settingsGui.AddText("x22 y312 w516 Center", "만든 사람")
+    lblMakerHead.SetFont("s9 c999999")
+    lblMakerName := settingsGui.AddText("x22 y330 w516 Center", MAKER_NAME)
+    lblMakerName.SetFont("s12 bold c1E293B")
+    lblMakerRole := settingsGui.AddText("x22 y356 w516 Center", MAKER_ROLE)
+    lblMakerRole.SetFont("s9 c475569")
+    lblMakerSlogan := settingsGui.AddText("x22 y376 w516 Center", MAKER_SLOGAN)
+    lblMakerSlogan.SetFont("s10 bold c2563EB")
+    lblVersion := settingsGui.AddText("x22 y414 w516 Center", "ClassZoom 버전 " APP_VERSION " · " MAKER_COPYRIGHT " · MIT 라이선스")
+    lblVersion.SetFont("s9 c999999")
+    lblHome := settingsGui.AddText("x186 y436 w100 Center", "songpro.app")
+    lblHome.SetFont("s9 c0066CC underline")
+    lblHome.OnEvent("Click", (*) => Run(AUTHOR_URL))
+    lblTerms := settingsGui.AddText("x284 y436 w80 Center", "이용 안내")
+    lblTerms.SetFont("s9 c0066CC underline")
+    lblTerms.OnEvent("Click", (*) => ShowTermsNotice(settingsGui.Hwnd))
 
     tabs.UseTab("단축키")
     AddHotkeyRow(settingsGui, 50, "Spotlight")

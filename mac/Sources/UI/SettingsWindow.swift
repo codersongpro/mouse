@@ -483,10 +483,16 @@ struct SettingsView: View {
                     Spacer()
                     Button("받으러 가기") { NSWorkspace.shared.open(update.downloadURL) }
                 }
-                HStack(spacing: 4) {
-                    Link("ClassZoom 홈페이지", destination: UpdateCheck.authorURL)
-                    Text("· MIT 라이선스").foregroundStyle(.secondary)
-                }
+                Divider()
+                Text("만든 사람").font(.caption).foregroundStyle(.secondary)
+                Text(Maker.name).font(.system(size: 15, weight: .bold))
+                Text(Maker.role).font(.callout).foregroundStyle(.secondary)
+                Text(Maker.slogan).font(.callout.weight(.semibold)).foregroundColor(Color(red: 0x25 / 255, green: 0x63 / 255, blue: 0xEB / 255))
+                HStack(spacing: 6) {
+                    Text("\(Maker.copyright) · MIT 라이선스").foregroundStyle(.secondary)
+                    Link("songpro.app", destination: UpdateCheck.authorURL)
+                    Button("이용 안내") { Notice.show(Notice.terms()) }.buttonStyle(.link)
+                }.font(.callout)
             }
         }
         .onAppear { login = LoginItem.state() }

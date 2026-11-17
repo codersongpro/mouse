@@ -11,6 +11,14 @@ private func bundleImage(_ name: String) -> NSImage {
     return NSImage(size: NSSize(width: 1, height: 1))
 }
 
+// 만든 사람 (설정 창 정보 카드·이용 안내와 같이 쓴다)
+enum Maker {
+    static let name = "송동석 (Songpro / Dustin)"
+    static let role = "AI Product Builder · Educator · Data Analyst"
+    static let slogan = "즐거움은 더하고, 불편함은 덜고."
+    static let copyright = "© 2026 송동석"
+}
+
 private func key(_ name: String) -> String {
     HotkeyDisplay.symbols(Settings.shared.hotkeys[name] ?? SettingsSchema.hotkeyDefaults[name] ?? "")
 }
@@ -51,6 +59,8 @@ struct UsageGuideView: View {
                 Toggle("다음부터 보지 않기", isOn: $dontShow)
                 Button("시작하기") { onClose(dontShow) }.keyboardShortcut(.defaultAction)
             }
+            Text("만든 사람 \(Maker.name) · \(Maker.slogan)")
+                .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
         }
         .padding(24)
         .frame(width: 600)

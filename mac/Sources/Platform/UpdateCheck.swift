@@ -7,7 +7,7 @@ import AppKit
     static let shared = UpdateCheck()
     nonisolated static let fileURL = URL(string: "https://raw.githubusercontent.com/codersongpro/mouse/main/version.txt")!
     nonisolated static let releasesURL = URL(string: "https://github.com/codersongpro/mouse/releases/latest")!
-    nonisolated static let authorURL = URL(string: "https://github.com/codersongpro/mouse")!
+    nonisolated static let authorURL = URL(string: "https://songpro.app")!
 
     enum Status: Equatable {
         case idle                 // 아직 읽지 않음 (자체 점검 그림도 이 모양)

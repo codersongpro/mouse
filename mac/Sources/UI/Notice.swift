@@ -127,6 +127,16 @@ enum Notice {
                    "이 안내는 메뉴 막대 아이콘 › 도움말 › 처음 안내 다시 보기에서 다시 볼 수 있습니다."])
     }
 
+    // ---------- 저작권 및 이용 안내 ----------
+    static func terms() -> NoticeContent {
+        NoticeContent(
+            title: "ClassZoom © 2026 \(Maker.name)",
+            body: ["MIT 라이선스로 배포하는 무료 프로그램입니다. 누구나 사용·복사·수정·배포할 수 있습니다.",
+                   "다시 배포할 때는 저작권 표시와 LICENSE 파일을 함께 넣어 주세요.",
+                   "이 프로그램은 있는 그대로 제공되며, 사용 중 생긴 문제에 대해 만든 사람은 책임지지 않습니다.",
+                   "개인정보를 수집하거나 외부로 보내지 않습니다. 인터넷은 설정 창을 열 때 새 버전을 확인하는 데에만 씁니다(버전 파일 1개 읽기)."])
+    }
+
     // ---------- 화면 기록 권한 (라이브 줌·화면 녹화) ----------
     static func screenRecordingNeeded(feature: String) -> NoticeContent {
         NoticeContent(

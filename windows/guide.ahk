@@ -34,7 +34,7 @@ HotkeyText(combo) {
 }
 
 ShowUsageGuide(*) {
-    global usageGui, showGuideOnStart, hotkeyCombos
+    global usageGui, showGuideOnStart, hotkeyCombos, MAKER_NAME, MAKER_SLOGAN
     global ICON_SPOT_DARK_PATH, ICON_DRAW_DARK_PATH, ICON_ZOOM_DARK_PATH, ICON_SETTINGS_PATH, ICON_REC_PATH
     if IsObject(usageGui)
         try usageGui.Destroy()
@@ -101,6 +101,9 @@ ShowUsageGuide(*) {
     g.SetFont("s10 norm c1E293B")
     chk := g.AddCheckbox("x24 y" (y + 16) " w300 h24 " (showGuideOnStart ? "" : "Checked"), "다음부터 보지 않기")
     btnOk := g.AddButton("x424 y" (y + 12) " w120 h32 Default", "시작하기")
+    ; 만든 사람 (설정 창 일반 탭과 같은 MAKER_* 값)
+    g.SetFont("s9 norm c94A3B8")
+    g.AddText("x24 y" (y + 54) " w520 Center", "만든 사람 " MAKER_NAME " · " MAKER_SLOGAN)
     close := (*) => GuideClose(g, chk)
     btnOk.OnEvent("Click", close)
     g.OnEvent("Close", close)

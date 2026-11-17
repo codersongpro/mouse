@@ -151,6 +151,18 @@ version.txt              설정 창의 "새 버전 확인"이 읽는 파일
 site/                    랜딩페이지 (Vercel, Root Directory = site)
 ```
 
-## 라이선스
+## 만든 사람
 
-MIT License — `LICENSE` 파일 참고.
+**송동석 (Songpro / Dustin)**
+AI Product Builder · Educator · Data Analyst
+즐거움은 더하고, 불편함은 덜고. — https://songpro.app
+
+## 저작권 및 이용 안내
+
+ClassZoom © 2026 송동석 (Songpro / Dustin)
+
+- MIT 라이선스로 배포하는 무료 프로그램입니다. 누구나 사용·복사·수정·배포할 수 있습니다.
+- 다시 배포할 때는 저작권 표시와 `LICENSE` 파일을 함께 넣어 주세요.
+- 이 프로그램은 있는 그대로 제공되며, 사용 중 생긴 문제에 대해 만든 사람은 책임지지 않습니다.
+- 개인정보를 수집하거나 외부로 보내지 않습니다. 인터넷은 설정 창을 열 때 새 버전을 확인하는 데에만 씁니다(버전 파일 1개 읽기).
+- 화면 녹화에는 FFmpeg(LGPL 2.1)을 씁니다.
