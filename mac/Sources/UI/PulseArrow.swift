@@ -4,17 +4,19 @@ import QuartzCore
 // ================= 움직이는 강조 화살표 (드로잉 중 V + 끌기) =================
 // 끈 방향으로 화살표가 생기고, 손을 떼면 머리(끝점)를 중심으로 커졌다 작아졌다를 되풀이해 눈길을 끈다.
 // 판서 그림(InkModel)이 아니라 따로 뜬 투명 창의 레이어라 지우개·실행 취소와 상관없고,
-// 새로 그리거나 delete(전부 지우기)·드로잉 끄기로 사라진다. 한 번에 하나만 둔다.
+// delete(전부 지우기)·드로잉 끄기로 모두 사라진다. 여러 개를 둘 수 있다 (maxCount개, 넘으면 오래된 것부터).
 // 움직임은 Core Animation이 맡아서(GPU) 앱은 CPU를 거의 쓰지 않는다. Windows판과 같은 크기·빠르기.
 
 @MainActor final class PulseArrow {
     static let periodS: CFTimeInterval = 1.0   // 한 번 커졌다 작아지는 시간
     static let amount: CGFloat = 0.25          // 가장 클 때 늘어나는 비율
+    static let maxCount = 12
 
-    private var panel: NSPanel?
-    private var group: CALayer?
+    private var panels: [String: NSPanel] = [:]  // 화면마다 투명 창 하나 (키: 화면 자리)
+    private var arrows: [CALayer] = []           // 움직이는 화살표들 (오래된 것부터)
+    private var group: CALayer?                  // 지금 끌고 있는 것
 
-    var isShown: Bool { panel != nil }
+    var isShown: Bool { !panels.isEmpty }
 
     // 끄는 동안 (움직이지 않음): tail → tip 화살표를 그린다. 점은 전역 좌표(왼쪽 아래 원점).
     func set(tail: CGPoint, tip: CGPoint, width: CGFloat, rgb: UInt32) {
@@ -59,6 +61,9 @@ import QuartzCore
     // 손을 뗐을 때: 커졌다 작아지기를 되풀이
     func start() {
         guard let g = group else { return }
+        group = nil
+        arrows.append(g)
+        if arrows.count > PulseArrow.maxCount { arrows.removeFirst().removeFromSuperlayer() }
         let an = CABasicAnimation(keyPath: "transform.scale")
         an.fromValue = 1.0
         an.toValue = 1.0 + PulseArrow.amount
@@ -69,16 +74,22 @@ import QuartzCore
         g.add(an, forKey: "pulse")
     }
 
-    func clear() {
-        group?.removeAllAnimations()
+    // 거의 움직이지 않고 손을 뗐을 때: 지금 것만 버린다
+    func cancel() {
+        group?.removeFromSuperlayer()
         group = nil
-        panel?.orderOut(nil)
-        panel = nil
+    }
+
+    func clear() {
+        group?.removeFromSuperlayer(); group = nil
+        for a in arrows { a.removeAllAnimations(); a.removeFromSuperlayer() }
+        arrows = []
+        for p in panels.values { p.orderOut(nil) }
+        panels = [:]
     }
 
     private func ensurePanel(on screen: NSScreen) -> NSPanel {
-        if let p = panel, p.frame == screen.frame { return p }
-        panel?.orderOut(nil)
+        if let p = panels[NSStringFromRect(screen.frame)] { return p }
         let p = NSPanel(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         p.isOpaque = false
         p.backgroundColor = .clear
@@ -91,7 +102,7 @@ import QuartzCore
         v.wantsLayer = true
         p.contentView = v
         p.setFrame(screen.frame, display: false)
-        panel = p
+        panels[NSStringFromRect(screen.frame)] = p
         return p
     }
 

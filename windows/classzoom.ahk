@@ -9,7 +9,7 @@
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
 ;@Ahk2Exe-SetDescription ClassZoom - 라이브 줌 / 마우스 하이라이트 / 드로잉 / 화면 녹화
-;@Ahk2Exe-SetVersion 1.2.9
+;@Ahk2Exe-SetVersion 1.3.0
 ;@Ahk2Exe-SetCopyright © 2026 송동석 (Songpro / Dustin). MIT License
 ;@Ahk2Exe-SetCompanyName Songpro
 
@@ -57,7 +57,7 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.2.9"
+APP_VERSION := "1.3.0"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
@@ -2867,7 +2867,7 @@ StrokeFinished() {
         if (moved && !dragOnOtherWindow)
             PulseArrowStart()
         else
-            PulseArrowClear()
+            PulseArrowCancel() ; 이번 것만 버린다 (있던 강조 화살표들은 그대로)
         return
     }
     if (dragShapeMode = "arrow" && dragPenKind = "" && !dragOnOtherWindow && moved) {
@@ -2910,59 +2910,86 @@ ArrowEditBegin(mx, my) {
 
 ; ---------------- 움직이는 강조 화살표 (드로잉 중 V + 드래그) ----------------
 ; 끈 방향으로 화살표가 생기고, 손을 떼면 화살표 끝(머리)을 중심으로 커졌다 작아졌다를 되풀이해
-; 눈길을 끈다. 판서 그림이 아니라 따로 뜬 창이라 지우개·실행 취소와 상관없고, 새로 그리거나
-; Delete(전부 지우기)·드로잉 끄기로 사라진다. 한 번에 하나만 둔다.
+; 눈길을 끈다. 판서 그림이 아니라 따로 뜬 창이라 지우개·실행 취소와 상관없고,
+; Delete(전부 지우기)·드로잉 끄기(F9·Esc)로 모두 사라진다. **여러 개를 둘 수 있다** (PULSE_MAX개까지,
+; 넘으면 가장 오래된 것부터 사라진다). 화살표마다 작은 창 하나, 움직임은 타이머 하나가 모두 맡는다.
 PULSE_PERIOD_MS := 1000   ; 한 번 커졌다 작아지는 시간
 PULSE_AMOUNT := 0.25      ; 가장 클 때 늘어나는 비율 (25%)
-pulseGui := "", pulseCanvas := "", pulseArrow := ""
+PULSE_MAX := 12           ; 한 화면에 둘 수 있는 강조 화살표 수
+pulseArrows := []         ; 화면에 있는 강조 화살표들 {x1,y1,x2,y2,color,thick,t0,gui,canvas}
+pulseCur := ""            ; 지금 끌고 있는 것 (손을 떼기 전)
+
 PulseArrowSet(x1, y1, x2, y2) {
-    global pulseArrow, activeDrawColor, activeDrawThickness
-    t := Max(6, activeDrawThickness * 1.5)
-    pulseArrow := {x1: x1, y1: y1, x2: x2, y2: y2, color: activeDrawColor, thick: t, t0: 0}
-    PulseArrowRender(1.0)
+    global pulseArrows, pulseCur, activeDrawColor, activeDrawThickness, PULSE_MAX
+    if !IsObject(pulseCur) {
+        if (pulseArrows.Length >= PULSE_MAX)
+            PulseArrowDestroy(pulseArrows.RemoveAt(1)) ; 가장 오래된 것부터
+        pulseCur := {gui: "", canvas: "", t0: 0}
+        pulseArrows.Push(pulseCur)
+    }
+    a := pulseCur
+    a.x1 := x1, a.y1 := y1, a.x2 := x2, a.y2 := y2
+    a.color := activeDrawColor, a.thick := Max(6, activeDrawThickness * 1.5)
+    PulseArrowRender(a, 1.0)
 }
 PulseArrowStart() {
-    global pulseArrow
-    if !IsObject(pulseArrow)
+    global pulseCur
+    if !IsObject(pulseCur)
         return
-    pulseArrow.t0 := A_TickCount
+    pulseCur.t0 := A_TickCount
+    pulseCur := ""
     SetTimer(PulseArrowTick, 33)
 }
+; 거의 움직이지 않고 손을 뗐으면 지금 것만 버린다 (이미 있던 화살표들은 그대로)
+PulseArrowCancel() {
+    global pulseArrows, pulseCur
+    if !IsObject(pulseCur)
+        return
+    for i, a in pulseArrows
+        if (a = pulseCur) {
+            pulseArrows.RemoveAt(i)
+            break
+        }
+    PulseArrowDestroy(pulseCur)
+    pulseCur := ""
+}
 PulseArrowTick() {
-    global pulseArrow, PULSE_PERIOD_MS, PULSE_AMOUNT
-    if !IsObject(pulseArrow) {
+    global pulseArrows, PULSE_PERIOD_MS, PULSE_AMOUNT
+    if (pulseArrows.Length = 0) {
         SetTimer(PulseArrowTick, 0)
         return
     }
-    ph := Mod(A_TickCount - pulseArrow.t0, PULSE_PERIOD_MS) / PULSE_PERIOD_MS
-    PulseArrowRender(1 + PULSE_AMOUNT * (0.5 - 0.5 * Cos(2 * 3.14159265 * ph)))
+    for a in pulseArrows
+        if a.t0 {
+            ph := Mod(A_TickCount - a.t0, PULSE_PERIOD_MS) / PULSE_PERIOD_MS
+            PulseArrowRender(a, 1 + PULSE_AMOUNT * (0.5 - 0.5 * Cos(2 * 3.14159265 * ph)))
+        }
 }
-; 머리(x2, y2)는 제자리, 꼬리와 굵기만 s배로 그린다
-PulseArrowRender(sc) {
-    global pulseGui, pulseCanvas, pulseArrow, activeDrawThickness, PULSE_AMOUNT
-    a := pulseArrow
+; 머리(x2, y2)는 제자리, 꼬리와 굵기만 sc배로 그린다
+PulseArrowRender(a, sc) {
+    global activeDrawThickness, PULSE_AMOUNT
     smax := 1 + PULSE_AMOUNT
     pad := Ceil(a.thick * smax * 4 + 12)
     ; 가장 클 때도 들어가는 상자 (창 크기·자리는 화살표가 바뀔 때만 바뀐다)
     tx := a.x2 + (a.x1 - a.x2) * smax, ty := a.y2 + (a.y1 - a.y2) * smax
     bx := Floor(Min(tx, a.x2)) - pad, by := Floor(Min(ty, a.y2)) - pad
     bw := Ceil(Abs(tx - a.x2)) + 2 * pad, bh := Ceil(Abs(ty - a.y2)) + 2 * pad
-    if !IsObject(pulseGui) {
-        pulseGui := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x8080020", "ClassZoom-PulseArrow")
-        pulseGui.Show("NA x0 y0 w1 h1")
+    if !IsObject(a.gui) {
+        a.gui := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x8080020", "ClassZoom-PulseArrow")
+        a.gui.Show("NA x0 y0 w1 h1")
     }
-    if (!IsObject(pulseCanvas) || pulseCanvas.w < bw || pulseCanvas.h < bh) {
-        DestroyAlphaCanvas(pulseCanvas)
-        pulseCanvas := CreateAlphaCanvas(bw + 128, bh + 128) ; 끌면서 커질 때 매번 새로 만들지 않게 여유를 둔다
+    if (!IsObject(a.canvas) || a.canvas.w < bw || a.canvas.h < bh) {
+        DestroyAlphaCanvas(a.canvas)
+        a.canvas := CreateAlphaCanvas(bw + 128, bh + 128) ; 끌면서 커질 때 매번 새로 만들지 않게 여유를 둔다
     }
-    c := pulseCanvas
+    c := a.canvas
     if !c.graphics
         return
     DllCall("gdiplus\GdipGraphicsClear", "ptr", c.graphics, "uint", 0)
     th := a.thick * sc
     x2 := a.x2 - bx, y2 := a.y2 - by
     x1 := x2 + (a.x1 - a.x2) * sc, y1 := y2 + (a.y1 - a.y2) * sc
-    saved := activeDrawThickness, activeDrawThickness := th ; 화살표 머리 크기가 굵기를 따른다 (ArrowGeometry)
+    saved := activeDrawThickness ; 화살표 머리 크기가 굵기를 따른다 (ArrowGeometry)
     ; 흰 테두리를 먼저 굵게 그려 어떤 배경 위에서도 잘 보이게 한다
     for layer in [[0xFFFFFFFF, th + 6], [0xFF000000 | a.color, th]] {
         activeDrawThickness := layer[2]
@@ -2972,18 +2999,32 @@ PulseArrowRender(sc) {
         DllCall("gdiplus\GdipDeletePen", "ptr", pPen)
     }
     activeDrawThickness := saved
-    PushCanvasToWindow(pulseGui.Hwnd, c, bx, by)
-    ZoomKeepOrder() ; 확대 중이면 확대 화면 아래로 (확대되어 보이게)
+    PushCanvasToWindow(a.gui.Hwnd, c, bx, by)
+    if !a.t0
+        ZoomKeepOrder() ; 새로 끄는 중이면: 확대 중일 때 확대 화면 아래로 (확대되어 보이게)
+}
+PulseArrowDestroy(a) {
+    if IsObject(a.gui)
+        try a.gui.Destroy()
+    DestroyAlphaCanvas(a.canvas)
+    a.gui := "", a.canvas := ""
 }
 PulseArrowClear() {
-    global pulseGui, pulseCanvas, pulseArrow
+    global pulseArrows, pulseCur
     SetTimer(PulseArrowTick, 0)
-    pulseArrow := ""
-    if IsObject(pulseGui)
-        try pulseGui.Destroy()
-    pulseGui := ""
-    DestroyAlphaCanvas(pulseCanvas)
-    pulseCanvas := ""
+    for a in pulseArrows
+        PulseArrowDestroy(a)
+    pulseArrows := []
+    pulseCur := ""
+}
+; 확대 화면 안에 들어가야 하는 강조 화살표 창들 (zoom.ahk ZoomBelowHwnds가 부른다)
+PulseArrowHwnds() {
+    global pulseArrows
+    list := []
+    for a in pulseArrows
+        if IsObject(a.gui)
+            try list.Push(a.gui.Hwnd)
+    return list
 }
 
 DrawPoll() {

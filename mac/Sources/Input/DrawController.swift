@@ -356,7 +356,7 @@ enum PenKind { case normal, laser, rainbow }
         rightDown = false
         if pulseDrag {
             pulseDrag = false
-            if hypot(shapeEndPt.x - start.x, shapeEndPt.y - start.y) >= 12 { pulse.start() } else { pulse.clear() }
+            if hypot(shapeEndPt.x - start.x, shapeEndPt.y - start.y) >= 12 { pulse.start() } else { pulse.cancel() }
             return
         }
         finishAtRelease(p)
