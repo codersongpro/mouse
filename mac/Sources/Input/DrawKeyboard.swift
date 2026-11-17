@@ -20,7 +20,7 @@ extension DrawController {
         switch k {
         case 53: requestOff(.esc)                                  // Esc
         case 51, 117: clearAll()                                   // delete / 앞으로 지우기
-        case 6, 7, 8: if !isRepeat { held.insert(k) }              // Z X C: 누르고 있는 동안 도형
+        case 6, 7, 8, 9: if !isRepeat { held.insert(k) }           // Z X C V: 누르고 있는 동안 도형 (V = 강조 화살표)
         case 0: pen = .laser; updateCursor()                       // A
         case 1: pen = .rainbow; rainbowColor = true; updateCursor() // S (이 뒤에 A를 누르면 무지개 레이저)
         case 12: board = 0; surface.invalidateAll(); updateCursor()        // Q
@@ -47,7 +47,7 @@ extension DrawController {
     }
 
     func handleKeyUp(_ k: UInt16, source: String) {
-        if [6, 7, 8].contains(k) { Log.log("KEY", "\(source) up code=\(k)") }
+        if [6, 7, 8, 9].contains(k) { Log.log("KEY", "\(source) up code=\(k)") }
         held.remove(k)
     }
 

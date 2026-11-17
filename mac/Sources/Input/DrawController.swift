@@ -46,7 +46,14 @@ enum PenKind { case normal, laser, rainbow }
     var rightDown = false
     var ignoreRightUp = false   // 왼쪽으로 긋는 도중 눌린 오른쪽 버튼 (뗄 때까지 무시)
     var ignoreLeftUp = false
-    var held: Set<UInt16> = [] // 누르고 있는 Z/X/C
+    var held: Set<UInt16> = [] // 누르고 있는 Z/X/C/V
+    // 움직이는 강조 화살표 (V + 끌기, UI/PulseArrow.swift)
+    let pulse = PulseArrow()
+    var pulseDrag = false
+    // 방금 그린 화살표: 머리나 꼬리를 끌어 길이·방향을 고친다 (count = 그때 목록 길이, 그 뒤에 무엇이 더해지면 고치지 않는다)
+    var lastArrow: (a: CGPoint, b: CGPoint, width: CGFloat, rgb: UInt32, alpha: CGFloat, count: Int)?
+    var arrowReverse = false   // 꼬리를 잡아 고치는 중: 움직이는 점이 꼬리, start(고정점)가 머리
+    var shapeEndPt: CGPoint = .zero
     var scrollAccum: CGFloat = 0
     var mouse: CGPoint = .zero
     var mouseInside = true      // 포인터 아래가 판인가 (위젯·캡처 화면 위면 false → 화살표를 보인다)
@@ -88,6 +95,7 @@ enum PenKind { case normal, laser, rainbow }
         ignoreRightUp = false; ignoreLeftUp = false
         optionHeld = false
         mouseInside = true
+        pulse.clear(); pulseDrag = false // 강조 화살표도 드로잉과 함께 사라진다
         lastCheckedMouse = CGPoint(x: -1e9, y: -1e9)
     }
 
@@ -243,6 +251,24 @@ enum PenKind { case normal, laser, rainbow }
             surface.invalidate(liveBounds)
             return
         }
+        // 방금 그린 화살표의 머리·꼬리 근처를 누르면 그 화살표를 되돌리고 반대쪽 끝을 고정한 채 다시 끈다
+        arrowReverse = false
+        if let la = lastArrow, pen == .normal, !held.contains(9), currentShape(e.modifierFlags) == .free, model.items.count == la.count {
+            let tol = 16 + la.width / 2
+            var fixed: CGPoint?
+            if hypot(p.x - la.b.x, p.y - la.b.y) <= tol { fixed = la.a }
+            else if hypot(p.x - la.a.x, p.y - la.a.y) <= tol { fixed = la.b; arrowReverse = true }
+            if let f = fixed, model.undo() {
+                surface.rebuildCaches()
+                mode = .arrow; start = f
+                live = InkItem(kind: .stroke, points: [f], width: la.width, rgb: la.rgb, alpha: la.alpha)
+                liveBounds = live!.bounds
+                refreshShape(end: p)
+                return
+            }
+            arrowReverse = false
+        }
+        if held.contains(9) { pulseDrag = true; return } // V: 강조 화살표 (판서 그림이 아니다)
         mode = currentShape(e.modifierFlags)
         if activePen == .laser {
             // 누르기만 해서는 레이저가 시작되지 않는다: 첫 이동 때 시작점부터 한꺼번에 시작한다. 누른 뒤 움직이기까지 걸리는 시간 동안
@@ -261,6 +287,12 @@ enum PenKind { case normal, laser, rainbow }
     func drag(_ p: CGPoint, _ e: NSEvent) {
         if (ignoreRightUp && e.type == .rightMouseDragged) || (ignoreLeftUp && e.type == .leftMouseDragged) { return }
         moveMouse(p)
+        if pulseDrag {
+            let end = e.modifierFlags.contains(.shift) ? snap45(start, p) : p
+            pulse.set(tail: start, tip: end, width: penPx(penStep), rgb: rgb)
+            shapeEndPt = end; lastPoint = p
+            return
+        }
         if erasing, var item = live {
             item.points.append(p)
             live = item
@@ -315,6 +347,11 @@ enum PenKind { case normal, laser, rainbow }
         if right, ignoreRightUp { ignoreRightUp = false; return }
         if !right, ignoreLeftUp { ignoreLeftUp = false; return }
         rightDown = false
+        if pulseDrag {
+            pulseDrag = false
+            if hypot(shapeEndPt.x - start.x, shapeEndPt.y - start.y) >= 12 { pulse.start() } else { pulse.clear() }
+            return
+        }
         finishAtRelease(p)
         if erasing {
             erasing = false
@@ -346,6 +383,14 @@ enum PenKind { case normal, laser, rainbow }
         }
         if activePen == .rainbow, mode != .free, let h = item.hues?.last { rainbowHue = h }
         commit(item)
+        // 보통 펜 화살표는 끝을 잡아 고칠 수 있게 기억한다
+        if mode == .arrow, activePen == .normal {
+            let (a, b) = arrowReverse ? (shapeEndPt, start) : (start, shapeEndPt)
+            lastArrow = (a, b, item.width, item.rgb, item.alpha, model.items.count)
+        } else {
+            lastArrow = nil
+        }
+        arrowReverse = false
         live = nil
         updateCursor()
     }
@@ -381,8 +426,10 @@ enum PenKind { case normal, laser, rainbow }
 
     func refreshShape(end: CGPoint) {
         guard var item = live else { return }
+        shapeEndPt = end
         if mode == .arrow {
-            let a = arrowParts(start, end, width: item.width) // 몸통 + 채운 머리
+            // 꼬리를 잡아 고치는 중이면 움직이는 점(end)이 꼬리, start가 머리
+            let a = arrowReverse ? arrowParts(end, start, width: item.width) : arrowParts(start, end, width: item.width) // 몸통 + 채운 머리
             item.points = a.shaft; item.head = a.head
         } else {
             item.points = shapePoints(mode, start, end, width: item.width)
@@ -444,6 +491,8 @@ enum PenKind { case normal, laser, rainbow }
     }
 
     func clearAll() {
+        pulse.clear()
+        lastArrow = nil
         if let c = model.clearAll() { surface.commit(c) }
     }
 }

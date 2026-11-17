@@ -71,9 +71,9 @@ enum KeyboardLayout {
             + plain("DFGHJKL;'") + [mod("return", 2.25)]
         let shiftL = Cap(label: "shift", role: "원", bar: .ellipse, width: 2.25)
         let shiftR = Cap(label: "shift", role: "원", bar: .ellipse, width: 2.75)
-        let r4: [Cap] = [shiftL, Cap(label: "Z", role: "직선", bar: .line), Cap(label: "X", role: "물결", bar: .wave), Cap(label: "C", role: "화살표", bar: .arrow)]
-            + plain("VBNM,./") + [shiftR]
-        // 맨 아래 줄: ⌃ = 원, ⌥ = 지우개 (끌면서 함께 누르는 키)
+        let r4: [Cap] = [shiftL, Cap(label: "Z", role: "직선", bar: .line), Cap(label: "X", role: "물결", bar: .wave), Cap(label: "C", role: "화살표", bar: .arrow), Cap(label: "V", role: "강조 화살표", bar: .arrow)]
+            + plain("BNM,./") + [shiftR]
+        // 맨 아래 줄: ⌃ = 네모, ⌥ = 지우개 (끌면서 함께 누르는 키)
         let r5: [Cap] = [mod("fn"), Cap(label: "control", role: "네모", bar: .rect), Cap(label: "option", role: "지우개", bar: .eraser), mod("command", 1.25),
                          mod("space", 5), mod("command", 1.25), Cap(label: "option", role: "지우개", bar: .eraser),
                          Cap(label: "←", role: "가늘게"),
@@ -253,6 +253,8 @@ struct KeyboardView: View {
                     (["⌃", "+", "드래그"], "네모"),
                     (["⇧", "+", "드래그"], "원"),
                     (["Z X C", "+", "드래그"], "직선 · 물결 · 화살표"),
+                    (["화살표 끝", "끌기"], "길이 · 방향 고치기"),
+                    (["V", "+", "드래그"], "강조 화살표 (움직임)"),
                     (["Z X C", "+", "⇧", "+", "드래그"], "0° · 45° · 90°로 맞춤"),
                     (["두 손가락 스크롤", "·", "↑ ↓"], "진하게 · 연하게"),
                 ])
