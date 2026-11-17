@@ -8,11 +8,11 @@
 
 ## 내려받기 (설치 없음)
 
-1. [Releases](https://github.com/codersongpro/mouse/releases/latest)에서 `ClassZoom-버전.zip`을 받습니다.
-2. 바탕화면이나 문서 폴더에 압축을 풀고 `classzoom.exe`를 실행합니다.
+1. [Releases](https://github.com/codersongpro/mouse/releases/latest)에서 `ClassZoom-버전.exe`를 받습니다.
+2. 바탕화면이나 문서 폴더에 두고 바로 실행합니다. 설치나 압축 풀기가 필요 없습니다.
 3. 파란 "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누릅니다 (전자서명이 없는 개인 제작 프로그램에 늘 뜨는 안내입니다).
 
-zip 안에는 `classzoom.exe`, `사용안내.txt`, `LICENSE.txt`, `licenses/`(FFmpeg LGPL 라이선스)가 들어 있습니다. **실행 파일은 `classzoom.exe` 하나**이고, 녹화 엔진(FFmpeg·녹화 도우미)은 그 안에 들어 있다가 처음 녹화할 때 `%LOCALAPPDATA%\ClassZoom\engine`에 한 번 꺼내집니다.
+사용안내·라이선스 파일까지 받으려면 `ClassZoom-버전.zip`을 받습니다. zip 안에는 `classzoom.exe`, `사용안내.txt`, `LICENSE.txt`, `licenses/`(FFmpeg LGPL 라이선스)가 들어 있습니다. **실행 파일은 `classzoom.exe` 하나**이고, 녹화 엔진(FFmpeg·녹화 도우미)은 그 안에 들어 있다가 처음 녹화할 때 `%LOCALAPPDATA%\ClassZoom\engine`에 한 번 꺼내집니다.
 
 처음 실행하면 **사용 방법 안내 창**이 뜹니다(위젯 버튼과 단축키 정리). "다음부터 보지 않기"를 체크하면 다음 실행부터 뜨지 않고, 트레이 메뉴 **사용 방법**이나 설정 → 일반 탭의 **사용 방법 보기**로 언제든 다시 열 수 있습니다.
 
@@ -134,7 +134,7 @@ git push origin v1.0.1
 2. **Root Directory**를 `site`로 정합니다 (Framework Preset: Other, Build Command 비움).
 3. **Deploy**를 누릅니다. 이후 main에 올릴 때마다 자동으로 다시 배포됩니다.
 
-다운로드 버튼은 열릴 때 GitHub에서 최신 릴리스를 읽어 zip 파일로 바로 연결됩니다. 새 버전을 릴리스해도 페이지를 고칠 필요가 없습니다.
+다운로드 버튼은 열릴 때 GitHub에서 최신 릴리스를 읽어 Windows는 exe, macOS는 zip 파일로 바로 연결됩니다. 새 버전을 릴리스해도 페이지를 고칠 필요가 없습니다.
 
 ## 파일 구성
 

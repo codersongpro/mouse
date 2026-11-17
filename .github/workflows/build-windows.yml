@@ -118,6 +118,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force windows\engine | Out-Null
           Copy-Item dist\classzoom-rec.exe, dist\ffmpeg.exe windows\engine\
+          Copy-Item dist\FFmpeg-LICENSE.txt windows\engine\ # LGPL 고지: 엔진을 꺼낼 때 함께 꺼낸다
           New-Item -ItemType Directory -Force dist | Out-Null
           $out = Join-Path $PWD 'dist/classzoom.exe'
           $p = Start-Process $env:AHK2EXE -ArgumentList '/in', 'classzoom.ahk', '/out', "`"$out`"", '/base', "`"$env:AHK_EXE`"", '/silent', 'verbose' `
@@ -155,6 +156,9 @@ jobs:
           $v = '${{ steps.ver.outputs.version }}'
           $dir = 'dist/ClassZoom'
           New-Item -ItemType Directory -Force $dir | Out-Null
+          # exe 하나만 받아 바로 실행하는 판 (zip 안의 exe를 두 번 누르면 Windows가 "압축 풀기"를 먼저 묻는다)
+          Copy-Item dist/classzoom.exe "dist/ClassZoom-$v.exe"
+          "exe=dist/ClassZoom-$v.exe" >> $env:GITHUB_OUTPUT
           Move-Item dist/classzoom.exe $dir
           Copy-Item windows/사용안내.txt $dir
           Copy-Item LICENSE "$dir/LICENSE.txt"
@@ -180,7 +184,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ClassZoom-${{ steps.ver.outputs.version }}
-          path: ${{ steps.pkg.outputs.zip }}
+          path: |
+            ${{ steps.pkg.outputs.zip }}
+            ${{ steps.pkg.outputs.exe }}
 
   # ---------------- 맥 ----------------
   mac:
@@ -218,11 +224,11 @@ jobs:
           ls -la dist
           TAG="v$VERSION"
           [ "$GITHUB_REF_TYPE" = tag ] && TAG="$GITHUB_REF_NAME"
-          WIN="dist/ClassZoom-$VERSION.zip"; MAC="dist/ClassZoom-$VERSION-mac.zip"
+          EXE="dist/ClassZoom-$VERSION.exe"; WIN="dist/ClassZoom-$VERSION.zip"; MAC="dist/ClassZoom-$VERSION-mac.zip"
           cat > notes.md <<NOTES
           ClassZoom $VERSION — 라이브 줌 · 마우스 하이라이트 · 드로잉 · 화면 녹화
 
-          **Windows 10 / 11:** \`ClassZoom-$VERSION.zip\`을 받아 압축을 풀고 \`classzoom.exe\`를 실행하세요. 파란 "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누르세요.
+          **Windows 10 / 11:** \`ClassZoom-$VERSION.exe\`를 받아 바로 실행하세요. 설치나 압축 풀기가 필요 없습니다. 파란 "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누르세요. (사용안내·라이선스 파일까지 받으려면 \`ClassZoom-$VERSION.zip\`)
 
           **macOS 14 이상:** \`ClassZoom-$VERSION-mac.zip\`을 받아 \`ClassZoom.app\`을 응용 프로그램 폴더로 옮긴 뒤 여세요. 처음 한 번은 시스템 설정 › 개인정보 보호 및 보안에서 **그래도 열기**를 누르고, 라이브 줌·녹화를 쓰려면 **화면 및 시스템 오디오 녹화** 권한을 켜 주세요.
 
@@ -230,8 +236,9 @@ jobs:
           - 화면 공유·녹화에 확대 화면이 그대로 보이고 커서는 하나만 보입니다
 
           SHA-256
-          - Windows: $(sha256sum "$WIN" | cut -d' ' -f1)
+          - Windows exe: $(sha256sum "$EXE" | cut -d' ' -f1)
+          - Windows zip: $(sha256sum "$WIN" | cut -d' ' -f1)
           - macOS: $(sha256sum "$MAC" | cut -d' ' -f1)
           NOTES
           sed -i 's/^          //' notes.md
-          gh release create "$TAG" "$WIN" "$MAC" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "ClassZoom $TAG" --notes-file notes.md
+          gh release create "$TAG" "$EXE" "$WIN" "$MAC" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "ClassZoom $TAG" --notes-file notes.md

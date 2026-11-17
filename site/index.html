@@ -81,7 +81,7 @@
   /* ---------- 히어로 그림: 전자칠판으로 수업하는 장면 ----------
      main.js가 .board의 data-step을 0→1→2→3으로 돌린다.
      0 마우스 하이라이트로 짚기 · 1 드로잉으로 쓰기 · 2 라이브 줌으로 키우기 · 3 화면 녹화로 남기기
-     움직임을 줄이도록 설정한 기기에서는 마지막 장면(3)에 멈춰 둔다. */
+     장면이 바뀔 때마다 커서·확대·선이 이어서 움직이도록 transition으로 잇는다. */
   .demo { position: relative; }
   .board { position: relative; border-radius: 16px; background: #111827; padding: 12px 12px 18px; box-shadow: 0 30px 60px -20px rgba(15,23,42,.45); }
   .board::after { content: ""; position: absolute; left: 50%; bottom: 5px; width: 18px; height: 5px; margin-left: -9px; border-radius: 3px; background: #374151; } /* 전원 표시 */
@@ -101,7 +101,7 @@
   .r1 { top: 37%; } .r2 { top: 57%; }
   .lesson .q { position: absolute; left: 7%; bottom: 9%; color: var(--ink-2); font-weight: 600; font-size: clamp(11px, 1.5vw, 18px); }
   .ink { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-  .ink path { fill: none; stroke: var(--red); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; }
+  .ink path { fill: none; stroke: var(--red); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; transition: opacity .5s, stroke-dashoffset 0s .5s; }
   .ink path.p2 { transition-delay: .55s; }
   .hl { position: absolute; width: 13%; aspect-ratio: 1; border-radius: 50%; background: rgba(250,204,21,.42); transform: translate(-50%, -50%) scale(.6); opacity: 0; transition: opacity .3s, transform .3s, left .9s, top .9s; }
   .cursor { position: absolute; width: clamp(16px, 2.2vw, 26px); filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); transition: left .9s cubic-bezier(.3,.7,.2,1), top .9s cubic-bezier(.3,.7,.2,1); }
@@ -122,8 +122,8 @@
   .board[data-step="2"] .w-zoom, .board[data-step="3"] .w-zoom { background: #BFDBFE; }
   .board[data-step="3"] .w-rec { background: #FECACA; }
   .board[data-step="1"] .cursor { left: 88%; top: 44%; }
-  .board:is([data-step="1"],[data-step="2"],[data-step="3"]) .ink path { opacity: 1; stroke-dashoffset: 0; transition: stroke-dashoffset .8s ease-in-out; }
-  .board[data-step="1"] .ink path.p2 { transition-delay: .55s; }
+  .board:is([data-step="1"],[data-step="2"],[data-step="3"]) .ink path { opacity: 1; stroke-dashoffset: 0; transition: opacity .2s, stroke-dashoffset .9s ease-in-out .2s; }
+  .board[data-step="1"] .ink path.p2 { transition-delay: .2s, 1.1s; }
   .board:is([data-step="2"],[data-step="3"]) .lesson { transform: scale(1.65); }
   .board:is([data-step="2"],[data-step="3"]) .cursor { left: 60%; top: 40%; }
   .board[data-step="2"] .badge { opacity: 1; }
@@ -135,13 +135,14 @@
   .demo-steps button small { display: block; font-size: 12px; font-weight: 600; }
   .demo-steps button[aria-pressed="true"] { border-color: var(--blue); background: var(--sky-l); color: var(--blue-d); }
   .demo figcaption { margin-top: 10px; text-align: center; color: var(--ink-3); font-size: 13px; }
-  @media (prefers-reduced-motion: no-preference) {
-    .board[data-step="3"] .recpill i { animation: blink 1.2s steps(2, start) infinite; }
-    @keyframes blink { to { visibility: hidden; } }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .lesson, .cursor, .hl, .ink path, .badge, .recpill { transition: none !important; }
-  }
+  /* 장면 안의 작은 움직임: 하이라이트 클릭 물결, 녹화 점 깜빡임, 커서 살짝 흔들기 */
+  .hl::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 3px solid rgba(250,204,21,.9); opacity: 0; }
+  .board[data-step="0"] .hl::after { animation: ripple 1.3s ease-out .9s infinite; }
+  @keyframes ripple { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+  .board[data-step="3"] .recpill i { animation: blink 1.2s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+  .board[data-step="2"] .cursor, .board[data-step="3"] .cursor { animation: drift 2.4s ease-in-out .9s infinite; }
+  @keyframes drift { 50% { transform: translate(-8px, 5px); } }
   @media (max-width: 560px) {
     .cta .btn { width: 100%; justify-content: center; }
     .demo-steps { grid-template-columns: repeat(2, 1fr); }
@@ -380,9 +381,9 @@
       <p class="eyebrow">시작하기</p>
       <h2>설치 없이 1분이면 준비 끝</h2>
       <div class="steps">
-        <div class="step"><h3>내려받기</h3><p>Windows용이나 macOS용 zip 파일을 받습니다.</p></div>
-        <div class="step"><h3>압축 풀기</h3><p>Windows는 바탕화면이나 문서 폴더에, macOS는 ClassZoom.app을 응용 프로그램 폴더에 둡니다.</p></div>
-        <div class="step"><h3>실행</h3><p><b>classzoom.exe</b>나 <b>ClassZoom.app</b>을 열면 화면 오른쪽 아래에 위젯이 나타납니다.</p></div>
+        <div class="step"><h3>내려받기</h3><p>Windows용 exe 파일이나 macOS용 zip 파일을 받습니다.</p></div>
+        <div class="step"><h3>옮겨 두기</h3><p>Windows는 받은 exe를 바탕화면이나 문서 폴더에 둡니다. 압축을 풀 필요가 없습니다. macOS는 zip을 풀어 ClassZoom.app을 응용 프로그램 폴더에 둡니다.</p></div>
+        <div class="step"><h3>실행</h3><p><b>exe 파일</b>이나 <b>ClassZoom.app</b>을 열면 화면 오른쪽 아래에 위젯이 나타납니다.</p></div>
       </div>
       <p class="note"><b>Windows</b>: 파란 “Windows의 PC 보호” 창이 뜨면 <b>추가 정보 → 실행</b>을 누르세요.<br><b>macOS</b>: 처음 한 번 <b>시스템 설정 › 개인정보 보호 및 보안 › 그래도 열기</b>를 누르세요. 라이브 줌·화면 녹화를 쓰려면 <b>화면 및 시스템 오디오 녹화</b> 권한을 켜세요.<br>전자서명을 하지 않은 무료 프로그램에 늘 뜨는 안내입니다.</p>
     </div>
@@ -441,6 +442,6 @@
   </div>
 </footer>
 
-<script src="/assets/main.js" defer></script>
+<script src="/assets/main.js?v=1.2.4" defer></script>
 </body>
 </html>

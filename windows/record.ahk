@@ -87,6 +87,7 @@ RecEnginePaths(&ffmpeg, &helper) {
         ; 아래 두 줄은 컴파일할 때 windows\engine\의 파일을 exe 안에 넣고, 실행할 때 꺼낸다
         FileInstall("engine\ffmpeg.exe", ffmpeg, 1)
         FileInstall("engine\classzoom-rec.exe", helper, 1)
+        FileInstall("engine\FFmpeg-LICENSE.txt", dir "\FFmpeg-LICENSE.txt", 1) ; FFmpeg LGPL 2.1 고지
         FileAppend(APP_VERSION, dir "\ready") ; 다 꺼낸 뒤에만 표시 (중간에 끊기면 다음에 다시 꺼낸다)
     } catch as err {
         MsgBox("녹화 엔진을 준비하지 못했습니다.`n`n" dir "`n(" err.Message ")", "ClassZoom — 녹화", "Icon!")
