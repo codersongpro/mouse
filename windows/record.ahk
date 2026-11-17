@@ -75,13 +75,16 @@ RecSaveFolder() {
 ;---------------- 녹화 엔진 (exe 하나로 배포) ----------------
 ; 녹화 도우미(classzoom-rec.exe)와 FFmpeg(ffmpeg.exe)은 engine.zip으로 압축되어 classzoom.exe 안에 들어 있다(FileInstall).
 ; 처음 녹화할 때 한 번만 %LOCALAPPDATA%\ClassZoom\engine\<버전>\에 꺼내 풀고(unpack.ahk), 다음부터는 풀어 둔 것을 쓴다.
-; exe 옆에 두 파일이 있으면 그것을 먼저 쓴다 — 소스(.ahk)로 실행할 때, 또는 FFmpeg을 다른 빌드로 바꿔 쓰고 싶을 때.
+; 소스(.ahk)로 실행할 때만 classzoom.ahk 옆의 두 파일을 쓴다.
+; [보안] exe로 실행할 때는 exe 옆의 ffmpeg.exe·classzoom-rec.exe를 **쓰지 않는다.** exe를 내려받기 폴더에서
+; 바로 실행하는 일이 많은데, 그 폴더에 누가 같은 이름의 다른 프로그램을 받아 두면 녹화 버튼이 그것을 실행하게 된다.
+; FFmpeg을 다른 빌드로 바꿔 쓰려면 %LOCALAPPDATA%\ClassZoom\engine\<버전>\ffmpeg.exe를 바꿔 넣는다 (LGPL).
 RecEnginePaths(&ffmpeg, &helper) {
     global APP_VERSION
-    ffmpeg := A_ScriptDir "\ffmpeg.exe", helper := A_ScriptDir "\classzoom-rec.exe"
-    if (FileExist(ffmpeg) && FileExist(helper))
-        return true
     if !A_IsCompiled {
+        ffmpeg := A_ScriptDir "\ffmpeg.exe", helper := A_ScriptDir "\classzoom-rec.exe"
+        if (FileExist(ffmpeg) && FileExist(helper))
+            return true
         MsgBox("소스로 실행할 때는 ffmpeg.exe와 classzoom-rec.exe를 classzoom.ahk 옆에 두어야 녹화됩니다.", "ClassZoom — 녹화", "Icon!")
         return false
     }
@@ -218,6 +221,11 @@ RecPickQuality() {
         g.SetFont("s10 c1E293B")
         y += 52
     }
+    ; 저장 위치도 보여 준다 (설정 파일이 바뀌어 낯선 곳·네트워크 폴더로 저장되는 일을 눈으로 확인할 수 있게)
+    g.SetFont("s9 c64748B")
+    g.AddText("x20 y" (y + 2) " w380", "저장 위치: " RecSaveFolder())
+    g.SetFont("s10 c1E293B")
+    y += 22
     chk := g.AddCheckbox("x20 y" (y + 4) " w380", "다음부터 묻지 않기 (설정 → 녹화에서 다시 켬)")
     g.OnEvent("Close", (*) => g.Hide())
     g.OnEvent("Escape", (*) => g.Hide())

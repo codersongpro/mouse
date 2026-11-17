@@ -4503,7 +4503,8 @@ ParseVersionFile(text, &ver, &url) {
         else if (k = "windows_url")
             url := v
     }
-    if (InStr(url, "https://github.com/codersongpro/mouse/", true) != 1)
+    ; [보안] 이 저장소의 GitHub 주소만, URL에 쓰는 글자만, ".." 없이. 아니면 최신 릴리스 쪽으로.
+    if (!RegExMatch(url, "^https://github\.com/codersongpro/mouse/[A-Za-z0-9._~%/-]*$") || InStr(url, ".."))
         url := RELEASES_URL
     return IsObject(VersionParts(ver))
 }

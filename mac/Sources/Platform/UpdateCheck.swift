@@ -53,8 +53,11 @@ import AppKit
         }
         guard let v = values["mac"], numbers(v) != nil else { return nil }
         // 받는 곳은 이 저장소의 GitHub 주소만 연다 (이상하면 최신 릴리스 쪽)
-        let url = values["mac_url"].flatMap(URL.init(string:)).flatMap {
-            $0.absoluteString.hasPrefix("https://github.com/codersongpro/mouse/") ? $0 : nil
+        // [보안] 이 저장소의 GitHub 주소만, URL에 쓰는 글자만, ".." 없이
+        let url = values["mac_url"].flatMap(URL.init(string:)).flatMap { u -> URL? in
+            let s = u.absoluteString
+            let okChars = s.unicodeScalars.allSatisfy { CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._~%/-:").contains($0) }
+            return s.hasPrefix("https://github.com/codersongpro/mouse/") && okChars && !s.contains("..") ? u : nil
         }
         return (v, url)
     }

@@ -24,7 +24,7 @@ on:
         default: false
 
 permissions:
-  contents: write # 릴리스를 만들 때만 쓴다
+  contents: read # 기본은 읽기만. 릴리스 작업만 아래에서 쓰기 권한을 받는다 (최소 권한)
 
 jobs:
   build:
@@ -198,7 +198,7 @@ jobs:
           $ffver
           Build: $env:asset  (https://github.com/BtbN/FFmpeg-Builds)
           Source code: https://ffmpeg.org/download.html  /  https://github.com/FFmpeg/FFmpeg
-          ffmpeg.exe는 수정하지 않은 그대로 classzoom.exe 안에 들어 있다가 처음 녹화할 때 %LOCALAPPDATA%\ClassZoom\engine에 꺼내집니다. classzoom.exe 옆에 다른 FFmpeg 빌드(ffmpeg.exe)와 classzoom-rec.exe를 두면 그것을 대신 씁니다.
+          ffmpeg.exe는 수정하지 않은 그대로 classzoom.exe 안에 들어 있다가 처음 녹화할 때 %LOCALAPPDATA%\ClassZoom\engine에 꺼내집니다. FFmpeg을 다른 빌드로 바꿔 쓰려면 그 폴더의 ffmpeg.exe를 바꿔 넣으면 됩니다.
           "@ -replace '(?m)^\s+', '' | Set-Content "$dir/licenses/THIRD-PARTY.txt" -Encoding utf8
           $zip = "dist/ClassZoom-$v.zip"
           Compress-Archive -Path $dir -DestinationPath $zip -Force
@@ -237,6 +237,8 @@ jobs:
     if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.release)
     needs: [build, mac]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # 릴리스와 태그를 만든다
     steps:
       - uses: actions/download-artifact@v4
         with:
