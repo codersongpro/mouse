@@ -9,7 +9,7 @@
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
 ;@Ahk2Exe-SetDescription ClassZoom - 라이브 줌 / 마우스 하이라이트 / 드로잉 / 화면 녹화
-;@Ahk2Exe-SetVersion 1.2.7
+;@Ahk2Exe-SetVersion 1.2.8
 ;@Ahk2Exe-SetCopyright © 2026 송동석 (Songpro / Dustin). MIT License
 ;@Ahk2Exe-SetCompanyName Songpro
 
@@ -52,7 +52,7 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.2.7"
+APP_VERSION := "1.2.8"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
@@ -3466,9 +3466,13 @@ ToggleDraw(*) {
     global activeDrawThickness, activeDrawStep, DrawStep, activeEraserSize, activeEraserStep, EraserStep
     global PEN_BASE_PX, PEN_STEP_RATIO, ERASER_BASE_PX, ERASER_STEP_RATIO
     global erasing, brushMode, boardGui, stepGui, laserGui, penKind, activeDrawAlpha, rainbowColor
+    global capsHoldActive, inkPinned
     drawOn := !drawOn
     ; 숫자키와 +/-로 잠깐 바꿔둔 색·굵기·지우개 크기는 여기서 초기화한다. 드로잉을 켤 때마다
     ; 설정에 저장된 값으로 시작하고, Esc 등으로 끄면 그 자리에서 되돌아간다. A·S로 고른 특수 펜도.
+    ; 단, Caps Lock을 눌렀다 뗐다 하며 이어 쓰는 동안(그림이 화면에 남아 있는 동안)은 고른 색·펜을 그대로 둔다.
+    if (capsHoldActive && (inkPinned || !drawOn))
+        goto DrawKeepPen
     penKind := ""
     rainbowColor := false
     activeDrawColor := drawColor
@@ -3477,11 +3481,16 @@ ToggleDraw(*) {
     activeEraserStep := EraserStep
     activeDrawThickness := PenPx(DrawStep)
     activeEraserSize := EraserPx(EraserStep)
+DrawKeepPen:
     SetTimer(HideStepNumber, 0)
     stepGui.Hide() ; 단계 숫자가 떠 있는 채로 모드가 바뀌면 화면에 남는다
     brushMode := "pen"
     erasing := false
     if drawOn {
+        if inkPinned { ; Caps Lock을 떼어 클릭만 통과시키던 판서 층을 다시 그릴 수 있게
+            WinSetExStyle("-0x20", drawGui)
+            inkPinned := false
+        }
         drawGui.Show("NA")
         ; 레이저 펜의 창은 판서 층 **바로 위**에 둔다 (그래서 판서 층 다음에 띄운다)
         laserGui.Show("NA")
@@ -3508,7 +3517,10 @@ ToggleDraw(*) {
         SetDrawModeHotkeys("On")
     } else {
         SetTimer(DrawPoll, 0)
-        PulseArrowClear() ; 강조 화살표도 드로잉과 함께 사라진다
+        pin := capsHoldActive ; Caps Lock을 뗐을 때: 그림·강조 화살표는 화면에 남기고 클릭만 통과
+        capsHoldActive := false
+        if !pin
+            PulseArrowClear() ; 강조 화살표도 드로잉과 함께 사라진다
         SetTimer(DiscardUndoHistory, -UNDO_KEEP_MS) ; 끈 채로 30초 지나면 실행 취소 기록을 비운다
         SetTimer(TrimMemory, -3000) ; 화면 크기 판들을 돌려준 뒤 메모리 정리
         SetDrawModeHotkeys("Off")
@@ -3517,7 +3529,13 @@ ToggleDraw(*) {
         laserGui.Hide()
         FreeInkLayer()    ; 반투명 획 전용 판도 다음에 쓸 때 다시 만든다
         FreeSnapshot()    ; 드래그 시작 때 뜨는 복사본도
-        drawGui.Hide()
+        if pin {
+            WinSetExStyle("+0x20", drawGui) ; 클릭 통과 (그린 것은 그대로 보인다)
+            inkPinned := true
+        } else {
+            drawGui.Hide()
+            inkPinned := false
+        }
         ; 칠판은 감추기만 하고 무슨 색이었는지는 기억해둔다 (다시 켤 때 그대로 깔린다)
         SetBoardColor(boardColor, boardAlpha)
         ; 판서를 켜느라 감췄던 설정 창이라면 하던 작업을 이어갈 수 있게 다시 띄운다
@@ -3663,6 +3681,8 @@ MakePenKindSetter(kind) => (*) => SetPenKind(kind)
 ; **칠판도 함께 걷는다.** 이쪽은 "이제 다 썼으니 정리한다"는 뜻이라, 다음에 켤 때는 아무것도
 ; 없는 상태에서 시작하는 게 맞다. (단축키로 끌 때는 글씨도 칠판도 그대로 둔다 — ToggleDraw 참고)
 ExitDrawMode(*) {
+    global capsHoldActive
+    capsHoldActive := false ; Caps Lock으로 켰더라도 Esc·위젯 버튼은 지우고 완전히 끈다
     ClearDrawing()
     SetBoardColor(-1)
     ToggleDraw()
@@ -4379,6 +4399,11 @@ OpenSettingsWindow(*) {
     ; 두 군데 적어두면 한쪽만 고쳐져 어긋나기 마련이라 그림 쪽으로 몰았다.
     btnShortcutGuide := settingsGui.AddButton("x130 y330 w220 h36", "드로잉 모드 단축키 보기")
     btnShortcutGuide.OnEvent("Click", ShowShortcutGuide)
+    chkCaps := settingsGui.AddCheckbox("x30 y388 w20 h20 " (capsHoldOn ? "Checked" : ""), "")
+    settingsGui.AddText("x54 y389 w460", "Caps Lock을 누르는 동안 드로잉 (떼면 그림은 화면에 남음)")
+    lblCapsHelp := settingsGui.AddText("x54 y411 w460 h36", "Caps Lock + V 끌기 = 강조 화살표.  지우기: Caps Lock + Delete.`n대문자 전환은 Shift + Caps Lock.")
+    lblCapsHelp.SetFont("s9 c999999")
+    chkCaps.OnEvent("Click", (ctrl, *) => SetCapsHold(ctrl.Value))
 
     tabs.UseTab()
 
@@ -5499,6 +5524,58 @@ SetDrawModeHotkeys(state) {
         ; 남는다. 켜고 끌 때마다 초기화해서 그런 유령 상태가 생기지 않게 한다.
         shapeKeyHeld[pair[1]] := false
     }
+}
+
+; ================= Caps Lock을 누르는 동안 드로잉 =================
+; F9로 켜고 끄지 않아도, Caps Lock을 누르고 있는 동안만 드로잉이 켜진다. 그 사이 드로잉 키
+; (V 강조 화살표, C 화살표, Ctrl 네모, 숫자 색 …)도 그대로 쓴다. 떼면 드로잉이 꺼지지만
+; **그린 것과 강조 화살표는 화면에 남고** 클릭만 아래 프로그램으로 통과한다(inkPinned).
+; 지우기: Caps Lock + Delete(전부 지우기) 또는 Caps Lock + Esc(지우고 끄기). F9로 켰다 끄면 평소처럼 감춰진다.
+; Caps Lock 본래의 대문자 전환은 Shift + Caps Lock으로 한다. (설정 → 단축키에서 끌 수 있다: [Draw] CapsLockHold)
+capsHoldOn := ReadIniNum("Draw", "CapsLockHold", 0, 1, 1) = 1
+capsHoldActive := false  ; 지금 Caps Lock으로 잠깐 켠 드로잉인가
+inkPinned := false       ; 드로잉은 꺼졌지만 그림을 화면에 남겨 둔 상태인가
+; 수식키와 함께 눌러도 받는다(*): 누른 채 Ctrl(네모)을 더하면 반복 입력에 Ctrl이 붙는데, 그걸 흘려보내면 대문자 전환이 켜진다
+Hotkey("*CapsLock", CapsDrawDown, capsHoldOn ? "On" : "Off")
+Hotkey("*CapsLock up", CapsDrawUp, capsHoldOn ? "On" : "Off")
+
+CapsDrawDown(*) {
+    global drawOn, capsHoldActive
+    SetTimer(CapsDrawRelease, 0)
+    if (drawOn || capsHoldActive) ; 이미 F9로 켰거나 길게 눌러 반복 입력이 들어오는 중
+        return
+    if GetKeyState("Shift", "P") { ; Shift + Caps Lock = 원래의 대문자 전환
+        SetCapsLockState(!GetKeyState("CapsLock", "T"))
+        return
+    }
+    capsHoldActive := true
+    ToggleDraw()
+}
+
+CapsDrawUp(*) {
+    global capsHoldActive
+    if capsHoldActive
+        CapsDrawRelease()
+}
+
+; 긋는 도중에 떼면 그 획을 마친 뒤에 끈다
+CapsDrawRelease() {
+    global capsHoldActive, drawOn, drawing, penStroke
+    if (!capsHoldActive || !drawOn)
+        return SetTimer(CapsDrawRelease, 0)
+    if (drawing || penStroke || GetKeyState("LButton", "P")) {
+        SetTimer(CapsDrawRelease, -30)
+        return
+    }
+    ToggleDraw() ; capsHoldActive가 참이라 그림을 남기고 끈다 (ToggleDraw 참고)
+}
+
+SetCapsHold(on) {
+    global capsHoldOn, SETTINGS_PATH
+    capsHoldOn := on ? true : false
+    Hotkey("*CapsLock", capsHoldOn ? "On" : "Off")
+    Hotkey("*CapsLock up", capsHoldOn ? "On" : "Off")
+    try IniWrite(capsHoldOn ? 1 : 0, SETTINGS_PATH, "Draw", "CapsLockHold")
 }
 
 ; ================= 전역 단축키 등록/검증 =================

@@ -87,6 +87,7 @@ ShowUsageGuide(*) {
         [HotkeyText(hotkeyCombos["RecordArea"]), "영역을 골라 그 부분만 녹화"],
         ["저장 위치", "동영상\ClassZoom 폴더 (설정 → 녹화에서 바꿈)"]])
     GuideSection(g, &y, "드로잉 중", [
+        ["Caps Lock 누른 채 드래그", "F9 없이 바로 그리기 (떼면 그림은 남음)"],
         ["Ctrl / Shift + 드래그", "네모 / 원"],
         ["Z / X / C + 드래그", "직선 / 물결 / 화살표 (화살표 끝을 끌어 고침)"],
         ["V + 드래그", "움직이는 강조 화살표"],
