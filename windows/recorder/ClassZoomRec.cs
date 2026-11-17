@@ -64,6 +64,76 @@ namespace ClassZoom
         int GetNextPacketSize(out uint frames);
     }
 
+    // ---------------- DXGI: 녹화할 곳이 어느 모니터(출력)인지 찾기 ----------------
+    // FFmpeg ddagrab(Desktop Duplication)은 첫 번째 그래픽 어댑터의 output_idx번 모니터를 찍고,
+    // offset은 그 모니터 왼쪽 위 기준이다. 그래서 모니터마다 데스크톱 좌표를 읽어 맞는 것을 고른다.
+    [ComImport, Guid("770aae78-f26f-4dba-a829-253c83d1b387"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IDXGIFactory1
+    {
+        void _SetPrivateData(); void _SetPrivateDataInterface(); void _GetPrivateData(); void _GetParent();
+        [PreserveSig] int EnumAdapters(uint index, out IDXGIAdapter adapter);
+    }
+
+    [ComImport, Guid("2411e7e1-12ac-4ccf-bd14-9798e8534dc0"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IDXGIAdapter
+    {
+        void _SetPrivateData(); void _SetPrivateDataInterface(); void _GetPrivateData(); void _GetParent();
+        [PreserveSig] int EnumOutputs(uint index, out IDXGIOutput output);
+    }
+
+    [ComImport, Guid("ae02eedb-c735-4690-8d52-5a8dc20213aa"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IDXGIOutput
+    {
+        void _SetPrivateData(); void _SetPrivateDataInterface(); void _GetPrivateData(); void _GetParent();
+        [PreserveSig] int GetDesc(out DXGI_OUTPUT_DESC desc);
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct DXGI_OUTPUT_DESC
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+        public int Left, Top, Right, Bottom;
+        public int AttachedToDesktop;
+        public int Rotation;
+        public IntPtr Monitor;
+    }
+
+    static class Dxgi
+    {
+        [DllImport("dxgi.dll")]
+        static extern int CreateDXGIFactory1(ref Guid riid, [MarshalAs(UnmanagedType.IUnknown)] out object factory);
+
+        // (x, y, w, h)가 통째로 들어가는 모니터를 찾는다. 찾으면 output_idx와 그 모니터 왼쪽 위 좌표.
+        public static bool FindOutput(int x, int y, int w, int h, out int idx, out int left, out int top, Action<string> log)
+        {
+            idx = -1; left = 0; top = 0;
+            try
+            {
+                Guid iid = typeof(IDXGIFactory1).GUID;
+                object o;
+                if (CreateDXGIFactory1(ref iid, out o) != 0 || o == null) return false;
+                var f = (IDXGIFactory1)o;
+                IDXGIAdapter ad;
+                if (f.EnumAdapters(0, out ad) != 0 || ad == null) return false;
+                for (uint i = 0; i < 16; i++)
+                {
+                    IDXGIOutput op;
+                    if (ad.EnumOutputs(i, out op) != 0 || op == null) break;
+                    DXGI_OUTPUT_DESC d;
+                    if (op.GetDesc(out d) != 0) continue;
+                    log("dxgi output " + i + " " + d.DeviceName + " (" + d.Left + "," + d.Top + ")-(" + d.Right + "," + d.Bottom + ") rot " + d.Rotation);
+                    if (d.AttachedToDesktop != 0 && x >= d.Left && y >= d.Top && x + w <= d.Right && y + h <= d.Bottom)
+                    {
+                        idx = (int)i; left = d.Left; top = d.Top;
+                        return d.Rotation <= 1; // 돌려 놓은 모니터(세로)는 좌표가 달라 GDI 방식으로
+                    }
+                }
+            }
+            catch (Exception ex) { log("dxgi failed: " + ex.Message); }
+            return false;
+        }
+    }
+
     // ---------------- 소리 한 갈래 (마이크 또는 컴퓨터 소리) ----------------
     class AudioSource
     {
@@ -277,10 +347,16 @@ namespace ClassZoom
             long bitrate = Math.Max(minRate, (long)(outW * (double)outH * fps * bpp));
             int mpegQ = quality == "high" ? 2 : quality == "low" ? 6 : 3;
             string scale = (outW != w) ? "-vf scale=" + outW + ":" + outH + " " : "";
+            // 화면 가져오기: Desktop Duplication(ddagrab)을 먼저 쓴다. 화면에 실제로 보이는 그림을 GPU에서 그대로 받아
+            // 라이브 줌 창(겹친 창)도 깨지지 않고, 커서도 화면에 보이는 것 하나만 찍히며, 1080p도 30fps를 낸다.
+            // GDI 방식(gdigrab)은 느리고(1080p에서 초당 10장 남짓) 겹친 창과 숨긴 커서를 제대로 담지 못해
+            // 원격 데스크톱처럼 ddagrab을 못 쓸 때만 쓴다.
+            int ddaIdx, ddaLeft, ddaTop;
+            bool useDda = Arg("grab", "auto") != "gdi" && Dxgi.FindOutput(x, y, w, h, out ddaIdx, out ddaLeft, out ddaTop, Log);
             Log("video " + w + "x" + h + " -> " + outW + "x" + outH + "@" + fps + " " + vcodec + " " + quality + " " + bitrate + ", audio sources " + sources.Count);
 
             var parts = new List<string>();
-            int seg = 0;
+            int seg = 0, attempt = 0;
             string cmd = Command(parent);
             while (cmd != "stop")
             {
@@ -289,12 +365,18 @@ namespace ClassZoom
                 // ---- 조각 하나 녹화 ----
                 string part = Path.Combine(partsDir, "part" + seg.ToString("000") + ".mkv");
                 var sb = new StringBuilder("-hide_banner -loglevel warning -y ");
-                sb.Append("-thread_queue_size 1024 -f gdigrab -framerate " + fps + " -offset_x " + x + " -offset_y " + y +
-                          " -video_size " + w + "x" + h + " -draw_mouse 1 -i desktop ");
+                if (useDda)
+                    sb.Append("-thread_queue_size 1024 -f lavfi -i \"ddagrab=output_idx=" + ddaIdx + ":framerate=" + fps +
+                              ":video_size=" + w + "x" + h + ":offset_x=" + (x - ddaLeft) + ":offset_y=" + (y - ddaTop) +
+                              ":draw_mouse=1,hwdownload,format=bgra\" ");
+                else
+                    sb.Append("-thread_queue_size 1024 -f gdigrab -framerate " + fps + " -offset_x " + x + " -offset_y " + y +
+                              " -video_size " + w + "x" + h + " -draw_mouse 1 -i desktop ");
                 int pidSelf = Process.GetCurrentProcess().Id;
+                attempt++;
                 foreach (var s in sources)
                 {
-                    s.BeginSegment("classzoom_" + pidSelf + "_" + s.Name + "_" + seg);
+                    s.BeginSegment("classzoom_" + pidSelf + "_" + s.Name + "_" + seg + "_" + attempt);
                     sb.Append(s.FfmpegInput());
                 }
                 if (sources.Count == 2)
@@ -309,6 +391,21 @@ namespace ClassZoom
 
                 var ff = StartFfmpeg(ffmpeg, sb.ToString());
                 if (ff == null) { foreach (var s in sources) s.EndSegment(); Status("error 녹화 엔진을 시작하지 못했습니다."); return 1; }
+                // ddagrab이 이 PC에서 안 되면(그래픽 드라이버·원격 데스크톱 등) 곧바로 끝난다 → GDI 방식으로 다시 시작
+                if (useDda)
+                {
+                    var t0 = Stopwatch.StartNew();
+                    while (!ff.HasExited && t0.ElapsedMilliseconds < 2500) Thread.Sleep(50);
+                    if (ff.HasExited)
+                    {
+                        Log("ddagrab failed (exit " + ff.ExitCode + "), falling back to gdigrab");
+                        foreach (var s in sources) s.EndSegment();
+                        try { File.Delete(part); } catch { }
+                        useDda = false;
+                        continue;
+                    }
+                }
+                Log("grabbing with " + (useDda ? "ddagrab" : "gdigrab"));
                 Status("recording");
                 while ((cmd = Command(parent)) == "rec" && !ff.HasExited) Thread.Sleep(100);
                 StopFfmpeg(ff);

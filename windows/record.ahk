@@ -10,6 +10,7 @@
 ;
 ; 어떻게 하나
 ;   실제 녹화는 classzoom-rec.exe(도우미, windows\recorder\ClassZoomRec.cs)와 ffmpeg.exe가 한다.
+;   화면은 Desktop Duplication(ddagrab)으로 받아 라이브 줌 화면·커서가 보이는 그대로 찍힌다 (안 되면 gdigrab).
 ;   두 파일은 classzoom.exe 안에 들어 있다가 처음 녹화할 때 꺼낸다(RecEnginePaths). 본체는 도우미를 숨겨 실행하고 "제어 파일"에 rec / pause / stop을 써서
 ;   조종하며, 도우미가 "상태 파일"에 적는 recording / paused / saving / done / error를 읽는다.
 ;   카운트다운·녹화 표시창·영역 테두리는 SetWindowDisplayAffinity로 녹화(와 화면 캡처)에서 뺀다.
