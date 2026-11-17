@@ -17,6 +17,33 @@ Persistent()
 SetWinDelay(-1)
 CoordMode("Mouse", "Screen")
 
+; ---------------- 하나만 실행 ----------------
+; #SingleInstance는 "같은 경로의 같은 파일"만 막는다. 예전 zip의 classzoom.exe와 새로 받은
+; ClassZoom-1.2.x.exe처럼 이름·폴더가 다르면 둘 다 떠서, 확대 창 두 개가 서로를 다시 확대하고
+; (화면이 흔들리고 뒤 창이 깜빡임) 커서도 두 개가 된다. 그래서 다른 ClassZoom을 찾아 먼저 끈다.
+CloseOtherInstances()
+SetTimer(TrimMemory, -8000) ; 시작하면서 잠깐 쓴 메모리(아이콘 그리기 등)를 돌려준다
+CloseOtherInstances() {
+    myPid := ProcessExist()
+    closed := false
+    DetectHiddenWindows(true)
+    for hwnd in WinGetList("ahk_class AutoHotkey") {
+        try {
+            pid := WinGetPID(hwnd)
+            if (pid = myPid || !RegExMatch(WinGetProcessName(hwnd), "i)^classzoom.*\.exe$"))
+                continue
+            WinClose(hwnd)                 ; 정상 종료: 그쪽 OnExit가 커서·확대를 원래대로 돌려 놓는다
+            if ProcessWaitClose(pid, 3)    ; 3초 안에 안 끝나면
+                ProcessClose(pid)
+            closed := true
+        }
+    }
+    DetectHiddenWindows(false)
+    ; 강제로 끝낸 쪽이 숨겨 둔 커서가 남지 않게 시스템 커서를 원래대로 다시 읽어 온다
+    if closed
+        DllCall("SystemParametersInfo", "uint", 0x57, "uint", 0, "ptr", 0, "uint", 0) ; SPI_SETCURSORS
+}
+
 ; Windows 기본 타이머 정밀도(약 15~16ms)를 그대로 쓰면 클릭 애니메이션 속도를 세밀하게
 ; 조절해도 특정 구간에서 뭉뚱그려져 갑자기 튀어 보인다. 1ms 단위로 더 정밀하게 요청한다.
 DllCall("winmm\timeBeginPeriod", "uint", 1)
@@ -3035,11 +3062,22 @@ UpdateSpotlightColor() {
 
 SpotFollow() {
     global spotlightOn, spotGui, SpotSize
+    static last := ""
     if !spotlightOn
         return
     MouseGetPos(&mx, &my)
     ZoomScreenPos(&mx, &my) ; 확대 중이면 확대 화면 속 커서 자리에 (zoom.ahk)
+    ; 커서가 그대로면 창을 옮기지 않는다 (가만히 있을 때 CPU를 거의 쓰지 않게)
+    if (mx "," my = last)
+        return
+    last := mx "," my
     WinMove(mx - SpotSize // 2, my - SpotSize // 2,,, spotGui)
+}
+
+; 지금 쓰지 않는 메모리를 Windows에 돌려준다 (작업 관리자의 메모리 수치가 줄어든다).
+; 기능을 끈 뒤·시작 직후처럼 한가할 때만 부른다. 필요한 부분은 다시 쓸 때 저절로 돌아온다.
+TrimMemory() {
+    DllCall("SetProcessWorkingSetSize", "ptr", DllCall("GetCurrentProcess", "ptr"), "ptr", -1, "ptr", -1)
 }
 
 ; ================= 클릭 시 원이 오므라드는 애니메이션 =================
@@ -3317,6 +3355,7 @@ ToggleDraw(*) {
     } else {
         SetTimer(DrawPoll, 0)
         SetTimer(DiscardUndoHistory, -UNDO_KEEP_MS) ; 끈 채로 30초 지나면 실행 취소 기록을 비운다
+        SetTimer(TrimMemory, -3000) ; 화면 크기 판들을 돌려준 뒤 메모리 정리
         SetDrawModeHotkeys("Off")
         brushGui.Hide()
         LaserClearAll()   ; 레이저 그림판도 함께 돌려준다

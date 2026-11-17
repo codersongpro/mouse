@@ -41,7 +41,9 @@ ZOOM_MIN_PCT := 125          ; 가장 작은 배율(%)
 ZOOM_MAX_PCT := 800          ; 가장 큰 배율(%)
 ZOOM_STEP_DEFAULTS := [150, 200, 300] ; 1·2·3단계 기본 배율(%)
 ZOOM_BADGE_MS := 900         ; 단계가 바뀔 때 커서 옆에 뜨는 "2단계 · 200%" 표시 시간
-ZOOM_TICK_MS := 15           ; 확대 화면을 다시 그리는 간격 (약 60fps). 확대 중에만 돈다
+ZOOM_TICK_MS := 15           ; 커서·배율을 확인하는 간격 (약 60fps). 확대 중에만 돈다
+ZOOM_REDRAW_EVERY := 2       ; 화면이 그대로일 때 확대 화면 내용(영상 등)은 이 틱마다 한 번 다시 그린다 (약 30fps, CPU 절반)
+ZOOM_RELEASE_MS := 20000     ; 확대를 끄고 이만큼 지나면 확대용 창·자원을 돌려준다 (메모리 절약, 다시 켜면 새로 만든다)
 ZOOM_ANIM_MS := 220          ; 부드럽게: 단계가 바뀔 때 확대·축소에 걸리는 시간 (점점 느려지며 멈춤)
 ZOOM_EDGE_FRAC := 0.15       ; 커서가 확대 화면 가장자리에서 이 비율 안으로 들어오면 그쪽으로 화면을 옮긴다
 
@@ -155,6 +157,7 @@ ZoomSetStep(n) {
 ZoomStart(step := 1) {
     global zoomOn, zoomVisible, zoomClosing, zoomLevel, zoomTarget, zoomSteps, zoomSmooth, zoomStep
     global zoomHost, zoomOX, zoomOY, zoomML, zoomMT, zoomFilterKey, zoomAnimFrom, zoomAnimTo
+    SetTimer(ZoomRelease, 0) ; 정리하려던 참이면 그만둔다
     if !ZoomInit()
         return
     zoomOn := true
@@ -209,6 +212,24 @@ ZoomHide() {
     zoomLevel := 1.0
     UpdateCursorHiddenState() ; 숨겨 둔 진짜 커서를 돌려준다
     RaiseWidget()
+    SetTimer(ZoomRelease, -ZOOM_RELEASE_MS)
+}
+
+; 한동안 확대를 안 쓰면 확대 창·확대 컨트롤·Magnification API를 정리해 메모리를 돌려준다.
+ZoomRelease() {
+    global zoomReady, zoomVisible, zoomHost, zoomMag, zoomCursorGui, zoomCursorCanvas, zoomFilterKey, zoomLastKey
+    if (zoomVisible || !zoomReady)
+        return
+    try DllCall("DestroyWindow", "ptr", zoomMag)
+    try zoomHost.Destroy()
+    try DllCall("Magnification\MagUninitialize")
+    if IsObject(zoomCursorGui)
+        try zoomCursorGui.Destroy()
+    try DestroyAlphaCanvas(zoomCursorCanvas)
+    zoomHost := "", zoomMag := 0, zoomCursorGui := "", zoomCursorCanvas := ""
+    zoomFilterKey := "", zoomLastKey := ""
+    zoomReady := false
+    TrimMemory()
 }
 
 ; 확대 중에만 켜는 키. 드로잉 모드의 Esc(지우고 끄기)와 겹치지 않게, Esc는 "확대 중이고
@@ -329,7 +350,9 @@ ZoomUseMonitorAt(x, y) {
 ZoomTick() {
     global zoomOn, zoomClosing, zoomLevel, zoomTarget, zoomSmooth, zoomOX, zoomOY, zoomLastKey
     global zoomML, zoomMT, zoomMW, zoomMH, zoomSrcL, zoomSrcT, zoomSrcW, zoomSrcH, zoomMag
-    global zoomAnimFrom, zoomAnimTo, zoomAnimT0, zoomBadgeUntil, ZOOM_ANIM_MS, ZOOM_EDGE_FRAC
+    global zoomAnimFrom, zoomAnimTo, zoomAnimT0, zoomBadgeUntil, ZOOM_ANIM_MS, ZOOM_EDGE_FRAC, ZOOM_REDRAW_EVERY
+    static n := 0, lastCur := ""
+    n++
     MouseGetPos(&cx, &cy)
 
     ; 커서가 다른 모니터로 넘어가면 확대 창도 따라간다
@@ -377,7 +400,8 @@ ZoomTick() {
 
     ; ---- 바뀐 것이 있을 때만 확대 컨트롤에 넘긴다 ----
     key := l "," t "," srcW "," srcH
-    if (key != zoomLastKey) {
+    changed := (key != zoomLastKey)
+    if changed {
         static m := Buffer(36, 0), rc := Buffer(16, 0)
         NumPut("float", zoomMW / srcW, m, 0)
         NumPut("float", zoomMH / srcH, m, 16)
@@ -392,14 +416,24 @@ ZoomTick() {
         zoomLastKey := key
     }
     zoomSrcL := l, zoomSrcT := t, zoomSrcW := srcW, zoomSrcH := srcH
-    ; 화면 내용(영상 등)은 계속 바뀌므로 매 프레임 다시 그리게 한다. 배경 지우기는 하지 않는다(false).
-    DllCall("InvalidateRect", "ptr", zoomMag, "ptr", 0, "int", false)
+    ; 화면 내용(영상 등)은 계속 바뀌므로 다시 그리게 한다. 배경 지우기는 하지 않는다(false).
+    ; 보는 영역이 바뀐 틱(이동·확대 애니메이션)은 바로, 그대로면 ZOOM_REDRAW_EVERY 틱마다 한 번 (약 30fps).
+    if (changed || Mod(n, ZOOM_REDRAW_EVERY) = 0)
+        DllCall("InvalidateRect", "ptr", zoomMag, "ptr", 0, "int", false)
 
-    ZoomUpdateCursor(cx, cy)
+    ; 그린 커서는 커서나 보는 영역이 움직였을 때만 옮긴다
+    cur := cx "," cy "," key
+    if (cur != lastCur || Mod(n, 30) = 0) {
+        ZoomUpdateCursor(cx, cy)
+        lastCur := cur
+    }
     if (zoomBadgeUntil && A_TickCount >= zoomBadgeUntil)
         ZoomHideBadge()
-    ZoomUpdateFilter()
-    ZoomKeepOrder()
+    ; 창 목록·순서 확인은 가끔만 (단계 표시·녹화 표시창은 띄울 때 직접 부른다)
+    if (Mod(n, 20) = 0)
+        ZoomUpdateFilter()
+    if (Mod(n, 6) = 0)
+        ZoomKeepOrder()
 }
 
 ; ---------------- 확대에서 뺄 창 / 창 순서 ----------------
@@ -486,6 +520,8 @@ ZoomKeepOrder(force := false) {
         if !bad
             return
     }
+    if force
+        ZoomUpdateFilter() ; 새로 띄운 우리 창(녹화 표시창 등)을 바로 확대 대상에서 뺀다
     flags := 0x1 | 0x2 | 0x10 ; SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE
     DllCall("SetWindowPos", "ptr", zoomHost.Hwnd, "ptr", -1, "int", 0, "int", 0, "int", 0, "int", 0, "uint", flags)
     for h in ZoomTopHwnds()

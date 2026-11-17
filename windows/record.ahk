@@ -254,6 +254,7 @@ RecFinish() {
     try FileDelete(recControl)
     try FileDelete(recStatus)
     UpdateWidgetState()
+    SetTimer(TrimMemory, -3000)
 }
 
 ; 프로그램을 끌 때 녹화 중이면 마무리할 시간을 준다 (도우미도 본체가 꺼진 것을 보고 스스로 정리한다)
