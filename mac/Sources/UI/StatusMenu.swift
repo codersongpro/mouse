@@ -1,0 +1,205 @@
+import AppKit
+
+// 메뉴 막대 아이콘과 그 메뉴 (위젯을 오른쪽 클릭해도 같은 메뉴가 뜬다).
+// 상태는 AppDelegate의 AppState에서 읽기만 한다.
+extension AppDelegate {
+    // ---------- 메뉴 막대 아이콘 ----------
+    func setupStatusItem() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        // ⌘를 누른 채 끌어서 아이콘을 치울 수 있게 두되(막으면 메뉴 막대가 좁은 맥북에서 곤란하다), 빠졌는지는 기록해 둔다
+        statusItem.autosaveName = "ClassZoomStatusItem"
+        statusItem.behavior = .removalAllowed
+        statusVisibility = statusItem.observe(\.isVisible, options: [.new]) { _, change in
+            AppLog.write("STATUSITEM", "visible=\(change.newValue ?? true)")
+        }
+        if let url = Bundle.main.url(forResource: "icon_menubar", withExtension: "png"),
+           let img = NSImage(contentsOf: url) {
+            img.size = NSSize(width: 18, height: 18)
+            img.isTemplate = true // 메뉴 막대 색(밝게/어둡게)에 맞춰 칠해진다
+            statusItem.button?.image = img
+        } else {
+            statusItem.button?.title = "F&D"
+        }
+        let menu = NSMenu()
+        menu.delegate = self
+        statusMenu = menu
+        statusItem.menu = menu
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) { fillMenu(menu) }
+
+    func fillMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+        func add(_ title: String, _ action: Selector, key: String = "", on: Bool = false) {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            item.target = self
+            item.state = on ? .on : .off
+            menu.addItem(item)
+        }
+        func keys(_ a: String, _ b: String) -> String {
+            [a, b].map { HotkeyDisplay.symbols(Settings.shared.hotkeys[$0] ?? SettingsSchema.hotkeyDefaults[$0] ?? "") }.joined(separator: " · ")
+        }
+        add("라이브 줌 (\(keys("Zoom", "ZoomAlt")))", #selector(menuZoom), on: zoom.isOn)
+        add("하이라이트 (\(keys("Spotlight", "SpotlightAlt")))", #selector(menuSpot), on: state.spotOn)
+        add("드로잉 (\(keys("Draw", "DrawAlt")))", #selector(menuDraw), on: draw.isOn)
+        if recorder.isActive {
+            add(recorder.phase == .paused ? "녹화 계속" : "녹화 일시정지", #selector(menuRecPause))
+            add("녹화 끝내기", #selector(menuRec))
+        } else {
+            add("화면 녹화 (\(keys("Record", "RecordAlt")))", #selector(menuRec))
+            add("영역 지정 녹화", #selector(menuRecArea))
+        }
+        add("드로잉 모드 단축키 보기", #selector(menuKeyboard))
+        menu.addItem(.separator())
+        add("위젯 표시", #selector(menuWidget), on: Settings.shared.showWidget)
+        add("메뉴 막대 아이콘을 위젯처럼 표시", #selector(menuTray), on: Settings.shared.showTrayIcons)
+        add("설정...", #selector(openSettings), key: ",")
+        menu.addItem(.separator())
+        let help = NSMenuItem(title: "도움말", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        let ver = NSMenuItem(title: "ClassZoom \(AppInfo.displayVersion)", action: nil, keyEquivalent: "")
+        ver.isEnabled = false
+        sub.addItem(ver)
+        for (t, a) in [("사용 방법", #selector(menuGuide)), ("진단 정보 복사", #selector(menuCopyDiag))] {
+            let i = NSMenuItem(title: t, action: a, keyEquivalent: "")
+            i.target = self
+            sub.addItem(i)
+        }
+        help.submenu = sub
+        menu.addItem(help)
+        Experiments.appendMenu(to: menu)
+        menu.addItem(.separator())
+        add("ClassZoom 종료", #selector(menuQuit), key: "q")
+    }
+
+    // 드로잉 중이면 먼저 끈다(그림은 남김): 판 아래에 뜨면 보이지도 눌리지도 않고, Esc가 드로잉으로 가 그림을 지운다
+    @objc func menuKeyboard() {
+        if draw.isOn { draw.turnOff(.settings) }
+        keyboardWindow.show()
+    }
+    @objc func menuSpot() { toggleSpotlight() }
+    @objc func menuZoom() { zoom.cycle() }
+    @objc func menuRec() { recorder.toggle(area: false) }
+    @objc func menuRecArea() { recorder.toggle(area: true) }
+    @objc func menuRecPause() { recorder.pauseToggle() }
+    @objc func menuGuide() { guide.show() }
+    @objc func menuDraw() { draw.toggle() }
+    @objc func menuWidget() { Settings.shared.showWidget.toggle() }
+    @objc func menuTray() { Settings.shared.showTrayIcons.toggle() }
+    // 합친 아이콘(강조 | 드로잉 | 설정)에서 눌린 자리: 왼쪽 = 강조, 가운데 = 드로잉, 오른쪽 = 메뉴(설정). 오른쪽 클릭·⌃클릭은 어디서나 메뉴.
+    @objc func trayClicked(_ sender: NSStatusBarButton) {
+        let e = NSApp.currentEvent
+        trayAction(menuClick: e?.type == .rightMouseUp || e?.modifierFlags.contains(.control) == true)
+    }
+
+    private func trayAction(menuClick: Bool) {
+        guard let w = statusItem.button?.window else { return }
+        let third = (NSEvent.mouseLocation.x - w.frame.minX) / max(1, w.frame.width) * 3
+        if menuClick || third >= 2 { showStatusMenu() }
+        else if third < 1 { toggleSpotlight() }
+        else { draw.isOn ? draw.turnOff(.widgetButton) : draw.turnOn() }
+    }
+
+    // 드로잉 중 판이 메뉴 막대를 덮어도 아이콘을 누르면 같은 일을 하게 한다 (판이 클릭을 받으면 여기로 넘어온다)
+    func handleClickOverStatusItem(menuClick: Bool) -> Bool {
+        guard let w = statusItem?.button?.window, w.frame.contains(NSEvent.mouseLocation) else { return false }
+        if Settings.shared.showTrayIcons { trayAction(menuClick: menuClick) } else { showStatusMenu() }
+        return true
+    }
+
+    private func showStatusMenu() {
+        // 드로잉 중이면 Esc처럼 끄고(그림도 지움) 메뉴는 판 이벤트 처리가 끝난 뒤에 연다.
+        // 판이 마우스를 누른 처리 한가운데서 메뉴 추적(performClick)을 돌리면 그 눌림이 끝나지 않은 채로 남아 이후 입력이 먹통이 된다.
+        let wasDrawing = draw.isOn
+        if wasDrawing { draw.turnOff(.esc) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (wasDrawing ? 0.15 : 0)) { [weak self] in
+            guard let self else { return }
+            self.statusItem.menu = self.statusMenu
+            self.statusItem.button?.performClick(nil)
+            self.statusItem.menu = Settings.shared.showTrayIcons ? nil : self.statusMenu // 기본 모드에서는 메뉴를 붙여 둬야 다음 클릭도 먹는다
+        }
+    }
+
+    // ---------- 합친 메뉴 막대 아이콘 (선택, 기본 꺼짐) ----------
+    // 켜면 한 칸에 위젯과 같은 차례로 강조 · 드로잉 · 설정을 얇은 테두리로 묶어 그린다. 꺼진 것은 메뉴 막대 색, 켜진 것은 파랑(0A84FF).
+    static var trayRetries = 0
+    func updateTrayIcons() {
+        guard let item = statusItem, let button = item.button else { return }
+        func load(_ name: String) -> NSImage? {
+            guard let url = Bundle.main.url(forResource: name, withExtension: "png"), let img = NSImage(contentsOf: url) else { return nil }
+            img.size = NSSize(width: 18, height: 18)
+            return img
+        }
+        guard Settings.shared.showTrayIcons else {
+            item.length = NSStatusItem.squareLength
+            item.menu = statusMenu
+            button.action = nil; button.target = nil; button.toolTip = nil
+            if let img = load("icon_menubar") { img.isTemplate = true; button.image = img }
+            return
+        }
+        item.length = NSStatusItem.variableLength
+        item.menu = nil
+        button.target = self
+        button.action = #selector(trayClicked(_:))
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        button.toolTip = "강조 · 드로잉 · 설정 메뉴"
+        let spotOn = state.spotOn, drawOn = draw.isOn
+        // 모든 크기를 메뉴 막대 높이에 비례시킨다. 기준은 노치 맥북(메뉴 막대 37)에서 정한 값: 테두리 28, 아이콘 21, 사이 여백 2, 양끝 여백 3.5.
+        // (NSStatusBar.thickness는 22로 옛 값이라 쓰지 않고 칸 창의 실제 높이를 읽는다. 폭이 너무 넓으면 시스템이 통째로 숨기므로 높이에 비례해 줄어들게 했다)
+        var barH = button.window?.frame.height ?? 0
+        if barH < 10 {
+            barH = NSScreen.screens.first.map { $0.safeAreaInsets.top > 0 ? $0.safeAreaInsets.top : 24 } ?? 24
+            if AppDelegate.trayRetries < 5 { // 칸 창이 생긴 뒤 실제 높이로 다시 (끝없이 되풀이하지 않게 5번까지)
+                AppDelegate.trayRetries += 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.updateTrayIcons() }
+            }
+        } else {
+            AppDelegate.trayRetries = 0 // 실제 높이를 읽었으니 다음에 높이를 못 읽어도 다시 5번 시도한다
+        }
+        let k = barH / 37
+        let imgH = (28 * k).rounded()
+        let icon = (21 * k).rounded(), gap = 2 * k, margin = 3.5 * k
+        let imgW = 3 * icon + 2 * gap + 2 * margin
+        let all = NSImage(size: NSSize(width: imgW, height: imgH), flipped: false) { r in
+            // 템플릿 이미지는 한 장이 한 색이라, 켜진 것만 파랑으로 칠하려면 직접 칠한다. 색은 그리는 중인 메뉴 막대의 밝기를 따른다.
+            let base = NSAppearance.currentDrawing().bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor.white : NSColor.black
+            // 위젯과 같은 차례(강조 · 드로잉 · 설정)를 얇은 둥근 테두리 하나로 묶는다
+            base.withAlphaComponent(0.75).setStroke()
+            let box = NSBezierPath(roundedRect: r.insetBy(dx: 0.5, dy: 0.5), xRadius: 6, yRadius: 6)
+            box.lineWidth = 1
+            box.stroke()
+            func glyph(_ name: String, on: Bool) -> NSImage? { tintedIcon(name, on ? color(ON_COLOR) : base) }
+            for (i, g) in [glyph("glyph_spotlight", on: spotOn), glyph("glyph_draw", on: drawOn), glyph("glyph_settings", on: false)].enumerated() {
+                g?.draw(in: NSRect(x: margin + CGFloat(i) * (icon + gap), y: (r.height - icon) / 2, width: icon, height: icon))
+            }
+            return true
+        }
+        all.isTemplate = !spotOn && !drawOn // 둘 다 꺼졌으면 시스템이 메뉴 막대 색으로 칠한다(가장 확실)
+        button.image = all
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.logStatusItems() }
+    }
+
+    // 어느 아이콘이 어디 있고 시스템이 보이게 두었는지 (노치·메뉴 막대 넘침으로 가려졌는지 찾으려고)
+    func logStatusItems() {
+        for (n, i) in [("main", statusItem)] {
+            guard let i else { continue }
+            let f = i.button?.window?.frame ?? .zero
+            AppLog.write("STATUSITEM", "\(n) visible=\(i.isVisible) x=\(Int(f.minX)) w=\(Int(f.width)) image=\(i.button?.image != nil) screenW=\(Int(i.button?.window?.screen?.frame.width ?? 0)) notchLeftInset=\(i.button?.window?.screen?.auxiliaryTopLeftArea.map { Int($0.width) } ?? -1) rightArea=\(i.button?.window?.screen?.auxiliaryTopRightArea.map { Int($0.minX) } ?? -1)")
+        }
+    }
+
+    @objc func menuFirstRun() { Notice.show(Notice.firstRun()) }
+
+    // 문제가 생겼을 때 붙여 보낼 글을 클립보드에 복사한다 (이름·컴퓨터 이름은 들어 있지 않다)
+    @objc func menuCopyDiag() {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(DiagReport.build(), forType: .string)
+        Notice.show(NoticeContent(
+            title: "진단 정보를 복사했습니다",
+            body: ["메모나 메신저에 붙여 넣어(⌘V) 보내 주세요.",
+                   "버전, macOS, 맥 모델, 화면 크기, 기본값과 다른 설정, 최근 기록이 들어 있습니다. 사용자·컴퓨터 이름과 입력한 글자는 들어 있지 않습니다."]))
+    }
+
+    @objc func menuQuit() { NSApp.terminate(nil) }
+}

@@ -1,0 +1,449 @@
+import AppKit
+
+// ================= 드로잉의 펜 상태와 마우스 =================
+// 그림 원본(선 목록)은 InkModel이, 판(창)은 InkSurface가 든다. 여기는 "지금 어떤 펜으로 무엇을 긋고 있는가"와
+// 마우스 입력을 맡는다. 키는 Input/DrawKeyboard.swift, 커서 모양은 UI/BrushCursor.swift, 레이저·숫자 배지는 UI/Overlays.swift.
+// 설정은 직접 읽지 않고 켤 때 받은 복사본(config)만 쓴다.
+
+enum PenKind { case normal, laser, rainbow }
+
+@MainActor final class DrawController {
+    let state: AppState
+    let surface = InkSurface()
+    let model = InkModel()
+    var config = DrawConfig() {
+        didSet { applyLaserTuning(holdMs: config.laserHold, fadeMs: config.laserFade, glowPercent: config.laserGlow) }
+    }
+    var requestOff: (OffReason) -> Void = { _ in } // Esc가 들어오면 DrawSession에 끄기를 부탁한다
+
+    var isOn: Bool { state.drawOn }
+    var items: [InkItem] { model.items }
+    var clock: () -> Date { get { model.clock } set { model.clock = newValue } } // 자체 점검이 가짜 시계를 넣는다
+
+    // 지금 펜
+    var rgb: UInt32 = 0xFF0000
+    var alpha: CGFloat = 1
+    var penStep = 5
+    var eraserStep = 5
+    var pen: PenKind = .normal
+    // 마우스를 누른 순간의 펜 종류를 잠근다. 긋는 도중 키로 pen을 바꿔도 이번 획은 끝까지
+    // activePen대로 그려지고(hues·points 길이가 어긋나 죽는 일이 없다), 새 pen은 다음 획부터 적용된다.
+    var activePen: PenKind = .normal
+    var rainbowHue: CGFloat = 0
+    // 마지막으로 고른 "색"이 무지개(S)인가. A(레이저)를 눌러도 유지되어 무지개 레이저가 되고, 숫자키를 누르면 풀린다.
+    var rainbowColor = false
+    var activeLaserRainbow = false   // 누른 순간에 잠근 값 (긋는 도중 키를 바꿔도 이번 획은 그대로)
+    var laserGlowHue: CGFloat?       // 이번 무지개 레이저 획의 둘레 빛 색조 (시작한 색)
+    var board = 0 // 0 = 투명(Q), 1~3 = W/E/R
+
+    // 긋는 중
+    private(set) var live: InkItem?
+    var mode: ShapeMode = .free
+    var start: CGPoint = .zero
+    var lastPoint: CGPoint = .zero
+    var liveBounds: CGRect = .null
+    var erasing = false
+    var rightDown = false
+    var ignoreRightUp = false   // 왼쪽으로 긋는 도중 눌린 오른쪽 버튼 (뗄 때까지 무시)
+    var ignoreLeftUp = false
+    var held: Set<UInt16> = [] // 누르고 있는 Z/X/C
+    var scrollAccum: CGFloat = 0
+    var mouse: CGPoint = .zero
+    var mouseInside = true      // 포인터 아래가 판인가 (위젯·캡처 화면 위면 false → 화살표를 보인다)
+    var optionHeld = false      // ⌥를 누르고 있는가 → 지우개 링 (ModifierWatch가 읽는다)
+    let watch = ModifierWatch()
+    private var lastCheckedMouse = CGPoint(x: -1e9, y: -1e9)
+
+    // 레이저 (UI/Overlays.swift)
+    var laser: [[LaserPt]] = []
+    var laserLive: [LaserPt]? = nil
+    var laserTimer: Timer?
+    // 굵기·진하기를 바꿀 때 잠깐 뜨는 숫자 (UI/Overlays.swift)
+    var badge: (text: String, until: Date)?
+    var badgeRect: CGRect = .null
+    var badgeText: String? { badge?.text }
+    // 판에 직접 그리는 붓 동그라미 (UI/BrushCursor.swift)
+    var cursorImage: NSImage?
+
+    init(state: AppState) {
+        self.state = state
+        surface.controller = self
+    }
+
+    // 드로잉을 막 켰을 때: 커서 자리를 잡고 붓 동그라미를 그린다
+    func begin() {
+        mouse = NSEvent.mouseLocation
+        mouseInside = true
+        optionHeld = ModifierWatch.optionDown()
+        SystemCursor.hide(.board)
+        surface.invalidateAll() // 지난번 자리에 남은 동그라미까지 지운다
+        updateCursor()
+        watch.onTick = { [weak self] in self?.tick() }
+        watch.start()
+    }
+
+    // 끄는 자리: 살핌을 멈추고 커서 상태를 되돌린다
+    func end() {
+        watch.stop()
+        ignoreRightUp = false; ignoreLeftUp = false
+        optionHeld = false
+        mouseInside = true
+        lastCheckedMouse = CGPoint(x: -1e9, y: -1e9)
+    }
+
+    // 20Hz (드로잉 중에만): ⌥ 상태, 포인터 아래 창, 커서 숨김이 풀렸는지
+    func tick() {
+        guard isOn else { return }
+        refreshOption()
+        tickCount += 1
+        if tickCount % 2 == 0, gestureStarted() { requestOff(.gesture); return } // 10Hz
+        let m = NSEvent.mouseLocation
+        if m != lastCheckedMouse { lastCheckedMouse = m; syncPointer() }
+        if mouseInside { SystemCursor.reassert() }
+    }
+
+    // 네 손가락 제스처가 시작됐는가: 판이 화면에서 밀려났거나 Mission Control(Dock의 높은 창)이 떴다
+    private var tickCount = 0
+    func gestureStarted() -> Bool {
+        if boardMovedAway(boardFrames: surface.windows.map(\.frame), screenFrames: NSScreen.screens.map(\.frame)) { return true }
+        let near = pointerNearDockEdge(NSEvent.mouseLocation, screens: NSScreen.screens.map(\.frame))
+        let infos = currentWindowInfos()
+        let hit = missionControlShowing(infos, boardLayer: OVERLAY_LEVEL.rawValue, nearDockEdge: near)
+        if hit { // 무엇 때문에 꺼졌는지 진단에 남긴다 (Dock 창의 레벨·크기)
+            let docks = infos.filter { $0.owner == "Dock" }.map { "L\($0.layer) \(Int($0.frame.width))x\(Int($0.frame.height))" }
+            Log.log("GESTURE", "dock windows=" + docks.joined(separator: ",") + " nearEdge=\(near)")
+        }
+        return hit
+    }
+
+    // ⌥만 눌러도 지우개 링, 떼면 붓 동그라미 (판이 키 창이 아니라 flagsChanged가 오지 않으므로 직접 읽는다)
+    func refreshOption(_ held: Bool = ModifierWatch.optionDown()) {
+        guard held != optionHeld else { return }
+        optionHeld = held
+        updateCursor()
+    }
+
+    // 실제 포인터 아래 창으로 판단한다: 판이면 붓 동그라미와 숨긴 커서, 위젯·캡처 화면·시스템 창이면 화살표
+    func syncPointer(_ target: PointerTarget? = nil) {
+        guard isOn else { return }
+        let t = target ?? currentPointerTarget(boards: Set(surface.windowNumbers), statusItemFrame: statusItemFrame())
+        let over = t == .board
+        guard over != mouseInside else { return }
+        mouseInside = over
+        surface.invalidate(cursorRect)
+        if over { SystemCursor.hide(.board) } else { SystemCursor.show(.board) }
+    }
+
+    // 숫자키로 바꾼 색·굵기는 임시값 — 켤 때마다 설정 창의 값으로 돌아온다
+    func resetTemporaries() {
+        rgb = config.drawColor; alpha = startAlpha(100)
+        penStep = config.drawStep; eraserStep = config.eraserStep
+        pen = .normal
+        rainbowColor = false
+    }
+
+    // 설정 창의 드로잉 진하기([Draw] Opacity)는 판 전체에 곱하지 않고 **긋기 시작할 때의 선 진하기**로만 쓴다.
+    // 켤 때·숫자키를 누를 때 "설정 진하기 × 그 색의 진하기"로 시작하고, 휠은 그 뒤 숫자를 그대로 바꾼다(절대값,
+    // 100%면 정말 불투명). 5% 아래로는 내리지 않는다. Windows 판 StartAlpha와 같다.
+    func startAlpha(_ keyPercent: Double) -> CGFloat {
+        CGFloat(max(5, min(100, (config.drawOpacity * keyPercent / 100).rounded()))) / 100
+    }
+
+    func expireUndoIfNeeded() { cancelExpiry(); model.expireIfNeeded() }
+
+    // 끄는 순간의 그림·칠판 정리. clear: Esc·위젯 버튼은 다 지우고 나가고, F9는 그대로 남긴다
+    func finishSession(clear: Bool) {
+        if clear {
+            clearAll()
+            board = 0
+        }
+        cancelLive()
+        laser = []; laserLive = nil
+        stopLaserTimer()
+        model.noteOff()
+        scheduleExpiry()
+    }
+
+    // ---------- 끈 뒤 1분 (선생님 결정 ③) ----------
+    // 끌 때 한 번 깨는 작업을 예약하고, 켜면 취소한다. 잠자기로 밀리면 켤 때 expireIfNeeded가 한 번 더 본다.
+    private var expiryWork: DispatchWorkItem?
+    var hasExpiryScheduled: Bool { expiryWork != nil }
+    func scheduleExpiry() {
+        expiryWork?.cancel()
+        let w = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.expiryWork = nil
+            self.model.expireIfNeeded()
+        }
+        expiryWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + UNDO_KEEP_S + 1, execute: w)
+    }
+    func cancelExpiry() { expiryWork?.cancel(); expiryWork = nil }
+
+    // 지금 펜 상태 (자체 점검용)
+    var penState: (rgb: UInt32, alpha: CGFloat, penStep: Int, eraserStep: Int, pen: PenKind, board: Int) {
+        (rgb, alpha, penStep, eraserStep, pen, board)
+    }
+
+    // ---------- 칠판 ----------
+    var boardColor: CGColor? {
+        guard board > 0 else { return nil }
+        return color(config.boardColors[board - 1], CGFloat(config.boardAlphas[board - 1]) / 100).cgColor
+    }
+
+    // 지우개 테두리는 칠판의 보색 — 어느 칠판 위에서도 묻히지 않는다 (칠판이 없으면 검정)
+    var currentEraserRing: NSColor {
+        eraserRingColor(boardRGB: board > 0 ? config.boardColors[board - 1] : nil)
+    }
+
+    // ---------- 마우스 ----------
+    func mouseMoved(_ p: CGPoint) {
+        Log.moves += 1
+        moveMouse(p)
+    }
+
+    func mouseEntered(_ p: CGPoint) {
+        guard isOn else { return }
+        moveMouse(p)
+        syncPointer()
+    }
+
+    // 판 밖(위젯 위, 판이 없는 곳)으로 나가면 평소 화살표를 돌려준다 — 지금 포인터 아래 창을 보고 정한다
+    func mouseExited() {
+        guard isOn else { return }
+        syncPointer()
+    }
+
+    // 판이 메뉴 막대까지 덮고 있어서, 메뉴 막대 아이콘 위 클릭은 여기서 대신 처리한다 (처리했으면 true). 뗄 때의 mouseUp은 무시한다.
+    var statusClick: (_ right: Bool) -> Bool = { _ in false }
+    var statusItemFrame: () -> CGRect? = { nil } // 우리 메뉴 막대 아이콘 칸 자리 (그 위에서는 화살표)
+
+    func down(_ p: CGPoint, _ e: NSEvent, right: Bool) {
+        // 한쪽 버튼으로 긋는 도중 다른 버튼을 눌러도 아무 일도 없다 (흔적도, 새 획도, 메뉴 막대 아이콘도). 그 버튼을 뗄 때도 무시한다.
+        if live != nil || laserLive != nil || erasing {
+            if right { ignoreRightUp = true } else { ignoreLeftUp = true }
+            return
+        }
+        if statusClick(right || e.modifierFlags.contains(.control)) {
+            // 드로잉이 꺼졌으면 판이 사라져 뗄 때의 mouseUp이 오지 않으므로 무시 표시를 남기지 않는다 (남으면 다음 드로잉의 첫 획이 안 그려진다)
+            if isOn { if right { ignoreRightUp = true } else { ignoreLeftUp = true } }
+            return
+        }
+        moveMouse(p)
+        start = p; lastPoint = p
+        activePen = pen
+        activeLaserRainbow = pen == .laser && rainbowColor
+        if right { rightDown = true }
+        if right || e.modifierFlags.contains(.option) {
+            // 지우개: 오른쪽 버튼으로 문지르기 (트랙패드에서는 ⌥ Option을 누른 채 끌기)
+            erasing = true
+            updateCursor()
+            live = InkItem(kind: .erase, points: [p], width: eraserPx(eraserStep))
+            liveBounds = live!.bounds
+            surface.invalidate(liveBounds)
+            return
+        }
+        mode = currentShape(e.modifierFlags)
+        if activePen == .laser {
+            // 누르기만 해서는 레이저가 시작되지 않는다: 첫 이동 때 시작점부터 한꺼번에 시작한다. 누른 뒤 움직이기까지 걸리는 시간 동안
+            // 점이 먼저 늙어 있으면 줄어드는 속도가 선 이어짐에서 달라져 보인다. (클릭만 하면 아무것도 남지 않는다)
+            laserLive = []
+            return
+        }
+        let w = penPx(penStep)
+        live = InkItem(kind: .stroke, points: [p], width: w, rgb: rgb, alpha: alpha,
+                       hues: activePen == .rainbow ? [rainbowHue] : nil)
+        liveBounds = live!.bounds
+        if mode == .free { surface.strokeAdd(live!) } // 처음 점 (도형은 끌 때 미리보기로 그린다)
+        surface.invalidate(liveBounds)
+    }
+
+    func drag(_ p: CGPoint, _ e: NSEvent) {
+        if (ignoreRightUp && e.type == .rightMouseDragged) || (ignoreLeftUp && e.type == .leftMouseDragged) { return }
+        moveMouse(p)
+        if erasing, var item = live {
+            item.points.append(p)
+            live = item
+            surface.invalidate(segmentBounds(lastPoint, p, item.width))
+            lastPoint = p
+            return
+        }
+        if activePen == .laser, laserLive != nil {
+            let now = Date.timeIntervalSinceReferenceDate
+            if mode == .free {
+                if laserLive!.isEmpty {
+                    laserGlowHue = activeLaserRainbow ? rainbowHue : nil
+                    laserLive = [LaserPt(p: start, t: now, hue: laserGlowHue, rgb: rgb, glow: laserGlowHue)]   // 시작점을 첫 이동 시각으로
+                    startLaserTimer()
+                }
+                var hue: CGFloat? = nil
+                if activeLaserRainbow { // 무지개 레이저: 무지개 펜과 같은 빠르기로 색이 돈다
+                    rainbowHue = (rainbowHue + hypot(p.x - lastPoint.x, p.y - lastPoint.y) * 360 / RAINBOW_CYCLE_PX).truncatingRemainder(dividingBy: 360)
+                    hue = rainbowHue
+                }
+                laserLive!.append(LaserPt(p: p, t: now, hue: hue, rgb: rgb, glow: laserGlowHue))
+            } else {
+                let end = shapeEnd(p, e.modifierFlags)
+                laserLive = laserShape(mode, start, end, width: laserWidth, t: now, rgb: rgb)
+                if activeLaserRainbow { laserLive = rainbowize(laserLive!, from: rainbowHue) }
+                // 미리보기도 다시 그리는 박자(레이저 타이머)가 있어야 지난 미리보기가 지워지고 새 모양이 그려진다.
+                // (없으면 커서 둘레처럼 다른 이유로 다시 그려지는 곳에만 조각조각 보였다)
+                startLaserTimer()
+            }
+            lastPoint = p
+            return
+        }
+        guard var item = live else { return }
+        if mode == .free {
+            if activePen == .rainbow {
+                rainbowHue = (rainbowHue + hypot(p.x - lastPoint.x, p.y - lastPoint.y) * 360 / RAINBOW_CYCLE_PX)
+                    .truncatingRemainder(dividingBy: 360)
+                item.hues?.append(rainbowHue)
+            }
+            item.points.append(p)
+            live = item
+            // 긋는 획은 전용 그림에 불투명하게 쌓는다 — 새 토막만 더하고 그 자리만 다시 합친다 (반투명·무지개도 같다)
+            surface.strokeAdd(lastSegment(of: item))
+            surface.invalidate(segmentBounds(lastPoint, p, item.width))
+        } else {
+            refreshShape(end: shapeEnd(p, e.modifierFlags))
+        }
+        lastPoint = p
+    }
+
+    func up(_ p: CGPoint, right: Bool = false) {
+        if right, ignoreRightUp { ignoreRightUp = false; return }
+        if !right, ignoreLeftUp { ignoreLeftUp = false; return }
+        rightDown = false
+        finishAtRelease(p)
+        if erasing {
+            erasing = false
+            // 움직이지 않은 오른쪽 클릭·⌥ 클릭(트랙패드 두 손가락 탭 포함)은 아무것도 지우지 않고
+            // 실행 취소 단계도 남기지 않는다
+            if let item = live, item.points.count > 1 { commit(item) }
+            live = nil
+            updateCursor()
+            return
+        }
+        if activePen == .laser, let pts = laserLive {
+            // 도형은 손을 뗀 순간부터 함께 사라진다
+            let now = Date.timeIntervalSinceReferenceDate
+            if !pts.isEmpty { laser.append(mode == .free ? pts : pts.map { LaserPt(p: $0.p, t: now, hue: $0.hue, rgb: $0.rgb, glow: $0.glow) }) }
+            if activeLaserRainbow, mode != .free, let h = pts.last?.hue { rainbowHue = h } // 다음 획은 이어서 (무지개 펜 도형과 같다)
+            laserLive = nil
+            if activeLaserRainbow { updateCursor() } // 커서의 둘레 빛을 다음 획이 시작할 색으로
+            startLaserTimer()
+            return
+        }
+        guard let item = live else { return }
+        // 움직이지 않은 한 번 클릭은 점을 남기지 않는다 (Windows와 같음, 결정 6)
+        if item.points.allSatisfy({ $0 == item.points[0] }) && item.head == nil {
+            surface.strokeClear(liveBounds.union(item.bounds))
+            surface.invalidate(liveBounds.union(item.bounds))
+            live = nil
+            updateCursor()
+            return
+        }
+        if activePen == .rainbow, mode != .free, let h = item.hues?.last { rainbowHue = h }
+        commit(item)
+        live = nil
+        updateCursor()
+    }
+
+    // 손을 뗀 점까지 획에 넣는다 (마지막 이동 이벤트 뒤에 조금 더 갔을 때)
+    private func finishAtRelease(_ p: CGPoint) {
+        guard erasing || mode == .free, var item = live, let last = item.points.last, hypot(p.x - last.x, p.y - last.y) >= 0.5 else { return }
+        if !erasing, activePen == .rainbow {
+            rainbowHue = (rainbowHue + hypot(p.x - lastPoint.x, p.y - lastPoint.y) * 360 / RAINBOW_CYCLE_PX).truncatingRemainder(dividingBy: 360)
+            item.hues?.append(rainbowHue)
+        }
+        item.points.append(p)
+        live = item
+        if item.kind == .stroke { surface.strokeAdd(lastSegment(of: item)) }
+        surface.invalidate(segmentBounds(lastPoint, p, item.width))
+        lastPoint = p
+    }
+
+    var laserWidth: CGFloat { max(penPx(penStep), LASER_MIN_WIDTH) }
+
+    private func currentShape(_ f: NSEvent.ModifierFlags) -> ShapeMode {
+        if held.contains(6) { return .line }   // Z
+        if held.contains(7) { return .wave }   // X
+        if held.contains(8) { return .arrow }  // C
+        if f.contains(.shift) { return .rect }
+        if f.contains(.control) { return .ellipse }
+        return .free
+    }
+
+    func shapeEnd(_ p: CGPoint, _ f: NSEvent.ModifierFlags) -> CGPoint {
+        [.line, .wave, .arrow].contains(mode) && f.contains(.shift) ? snap45(start, p) : p
+    }
+
+    func refreshShape(end: CGPoint) {
+        guard var item = live else { return }
+        if mode == .arrow {
+            let a = arrowParts(start, end, width: item.width) // 몸통 + 채운 머리
+            item.points = a.shaft; item.head = a.head
+        } else {
+            item.points = shapePoints(mode, start, end, width: item.width)
+        }
+        if activePen == .rainbow {
+            // 테두리를 따라 색이 돈다. 미리보기는 매번 획을 시작한 색에서 다시 출발한다.
+            var h = item.hues?.first ?? rainbowHue
+            var hues: [CGFloat] = [h]
+            for i in 1..<item.points.count {
+                h += hypot(item.points[i].x - item.points[i - 1].x, item.points[i].y - item.points[i - 1].y) * 360 / RAINBOW_CYCLE_PX
+                hues.append(h.truncatingRemainder(dividingBy: 360))
+            }
+            item.hues = hues
+        }
+        let nb = item.bounds
+        surface.strokeReplace(clear: liveBounds, with: item)
+        surface.invalidate(liveBounds.union(nb))
+        liveBounds = nb
+        live = item
+    }
+
+    private func segmentBounds(_ a: CGPoint, _ b: CGPoint, _ w: CGFloat) -> CGRect {
+        CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y)).insetBy(dx: -w - 2, dy: -w - 2)
+    }
+
+    // 방금 더한 한 토막만 든 획 (전용 그림에 더할 때 쓴다). 무지개는 두 점의 색만 넘긴다.
+    private func lastSegment(of item: InkItem) -> InkItem {
+        let n = item.points.count
+        var seg = item
+        seg.points = Array(item.points[max(0, n - 2)...])
+        if let h = item.hues, h.count == n { seg.hues = Array(h[max(0, n - 2)...]) }
+        return seg
+    }
+
+    // 화면 구성이 바뀔 때: 긋던 획·지우던 획을 손을 뗀 것처럼 깔끔히 끝내 매달린 획이 남지 않게 한다
+    func endStroke() {
+        if live != nil || laserLive != nil { up(lastPoint) }
+        rightDown = false; erasing = false; held = []
+    }
+
+    private func cancelLive() {
+        if let l = live {
+            let r = liveBounds.union(l.bounds)
+            surface.strokeClear(r)
+            surface.invalidate(r)
+        }
+        live = nil; erasing = false; rightDown = false; held = []
+        ignoreRightUp = false; ignoreLeftUp = false
+    }
+
+    // ---------- 목록 다루기 ----------
+    private func commit(_ item: InkItem) {
+        model.commit(item)
+        surface.commit(item)
+    }
+
+    func undo() {
+        if model.undo() { surface.rebuildCaches() }
+    }
+
+    func clearAll() {
+        if let c = model.clearAll() { surface.commit(c) }
+    }
+}
