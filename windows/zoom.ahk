@@ -435,6 +435,8 @@ ZoomBelowHwnds() {
 ; 거울처럼 끝없이 겹친다. 위젯은 크기를 바꾸면 다시 만들어지므로 목록이 바뀔 때마다 다시 알린다.
 ZoomUpdateFilter() {
     global zoomMag, zoomHost, zoomFilterKey
+    if (!IsObject(zoomHost) || !zoomMag)
+        return
     list := ZoomTopHwnds()
     list.InsertAt(1, zoomHost.Hwnd)
     key := ""
@@ -454,7 +456,9 @@ ZoomUpdateFilter() {
 ; force가 참이면 확인 없이 맞춘다. 확인은 위쪽 창 몇 개만 훑으므로 매 프레임 해도 가볍다.
 ZoomKeepOrder(force := false) {
     global zoomHost, zoomVisible
-    if !zoomVisible && !force
+    ; 확대 창이 아직 없거나(한 번도 확대하지 않음) 꺼져 있으면 맞출 순서가 없다.
+    ; 녹화 표시창·카운트다운·영역 선택 창이 확대와 상관없이 부르므로 꼭 먼저 본다.
+    if (!IsObject(zoomHost) || !zoomVisible)
         return
     if !force {
         ; 확대 창 위에 "확대돼야 할 우리 창"(판서 층·위젯·안내 창 등)이 올라와 있으면 순서를 다시 맞춘다.
