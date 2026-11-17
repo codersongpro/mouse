@@ -21,9 +21,13 @@ CoordMode("Mouse", "Screen")
 ; #SingleInstance는 "같은 경로의 같은 파일"만 막는다. 예전 zip의 classzoom.exe와 새로 받은
 ; ClassZoom-1.2.x.exe처럼 이름·폴더가 다르면 둘 다 떠서, 확대 창 두 개가 서로를 다시 확대하고
 ; (화면이 흔들리고 뒤 창이 깜빡임) 커서도 두 개가 된다. 그래서 다른 ClassZoom을 찾아 먼저 끈다.
+appReady := false ; 설정을 다 읽기 전에는 클릭 효과 같은 핫키가 아무것도 하지 않는다 (아래 LoadSettings 뒤에 참)
 CloseOtherInstances()
 SetTimer(TrimMemory, -8000) ; 시작하면서 잠깐 쓴 메모리(아이콘 그리기 등)를 돌려준다
 CloseOtherInstances() {
+    ; 예전 ClassZoom이 꺼지기를 기다리는 동안(최대 3초) 클릭·단축키가 끼어들면 아직 읽지 않은 설정을 써서
+    ; 오류가 난다(1.2.6~1.2.9: "clickColor has not been assigned"). 기다리는 동안은 끼어들지 못하게 한다.
+    Critical
     myPid := ProcessExist()
     closed := false
     DetectHiddenWindows(true)
@@ -42,6 +46,7 @@ CloseOtherInstances() {
     ; 강제로 끝낸 쪽이 숨겨 둔 커서가 남지 않게 시스템 커서를 원래대로 다시 읽어 온다
     if closed
         DllCall("SystemParametersInfo", "uint", 0x57, "uint", 0, "ptr", 0, "uint", 0) ; SPI_SETCURSORS
+    Critical "Off"
 }
 
 ; Windows 기본 타이머 정밀도(약 15~16ms)를 그대로 쓰면 클릭 애니메이션 속도를 세밀하게
@@ -466,6 +471,7 @@ SetRunAtStartup(enable) {
 ; ================= 상태값 =================
 spotlightOn := false
 drawOn := false
+appReady := true ; 설정과 켜짐 상태까지 준비됨 (클릭 효과는 clickAnim이 만들어진 뒤에야 움직인다 — StartClickAnimation)
 drawing := false
 lastX := 0
 lastY := 0
@@ -3328,10 +3334,13 @@ ClickAnimStep() => ClickAnimStepFor("L")
 RClickAnimStep() => ClickAnimStepFor("R")
 
 StartClickAnimation(side) {
-    global spotlightOn, drawOn, clickAnim
+    global spotlightOn, drawOn, clickAnim, appReady
+    ; 시작하는 중(설정을 읽기 전)이거나 강조가 꺼져 있으면 아무것도 하지 않는다
+    if (!appReady || !IsSet(clickAnim) || !spotlightOn || drawOn)
+        return
     st := ClickStyle(side)
     ; 판서 중에는 강조 하이라이트 자체를 감춰두므로, 클릭 링 효과도 같이 쉰다
-    if (!spotlightOn || drawOn || !st.enabled)
+    if !st.enabled
         return
     a := clickAnim[side]
     a.frame := 0
