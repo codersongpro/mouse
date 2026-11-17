@@ -53,19 +53,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Force tools/ahk, tools/ahk2exe | Out-Null
-          # autohotkey.com은 CI 서버의 내려받기를 막으므로(Cloudflare) 공식 GitHub 릴리스에서 받는다
-          $hdr = @{ Authorization = "Bearer $env:GH_TOKEN" }
-          $ahkRel = Invoke-RestMethod https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest -Headers $hdr
-          $ahkAsset = $ahkRel.assets | Where-Object { $_.name -like 'AutoHotkey_2*.zip' } | Select-Object -First 1
-          if (-not $ahkAsset) { throw "AutoHotkey v2 zip not found in $($ahkRel.tag_name)" }
-          Write-Host "AutoHotkey $($ahkRel.tag_name)"
-          Invoke-WebRequest $ahkAsset.browser_download_url -OutFile tools/ahk.zip
-          Expand-Archive tools/ahk.zip tools/ahk -Force
-          $rel = Invoke-RestMethod https://api.github.com/repos/AutoHotkey/Ahk2Exe/releases/latest -Headers $hdr
-          $asset = $rel.assets | Where-Object { $_.name -like '*.zip' } | Select-Object -First 1
-          Write-Host "Ahk2Exe $($rel.tag_name)"
-          Invoke-WebRequest $asset.browser_download_url -OutFile tools/ahk2exe.zip
-          Expand-Archive tools/ahk2exe.zip tools/ahk2exe -Force
+          # autohotkey.com은 CI 서버의 내려받기를 막으므로(Cloudflare) 공식 GitHub 릴리스에서 받는다.
+          # 익명 API는 호출 횟수 제한에 걸리므로 인증된 gh를 쓴다.
+          gh release download -R AutoHotkey/AutoHotkey -D tools -p 'AutoHotkey_2*.zip'
+          gh release download -R AutoHotkey/Ahk2Exe -D tools -p 'Ahk2Exe*.zip'
+          $ahkZip = Get-ChildItem tools -Filter 'AutoHotkey_2*.zip' | Select-Object -First 1
+          $a2eZip = Get-ChildItem tools -Filter 'Ahk2Exe*.zip' | Select-Object -First 1
+          if (-not $ahkZip -or -not $a2eZip) { throw "AutoHotkey download failed" }
+          Write-Host "$($ahkZip.Name) / $($a2eZip.Name)"
+          Expand-Archive $ahkZip.FullName tools/ahk -Force
+          Expand-Archive $a2eZip.FullName tools/ahk2exe -Force
           Get-ChildItem tools/ahk -Filter AutoHotkey64.exe -Recurse | Select-Object -First 1 | ForEach-Object { "AHK_EXE=$($_.FullName)" >> $env:GITHUB_ENV }
           Get-ChildItem tools/ahk2exe -Filter Ahk2Exe.exe -Recurse | Select-Object -First 1 | ForEach-Object { "AHK2EXE=$($_.FullName)" >> $env:GITHUB_ENV }
 
@@ -100,13 +97,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $hdr = @{ Authorization = "Bearer $env:GH_TOKEN" }
-          $rel = Invoke-RestMethod https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest -Headers $hdr
-          $asset = $rel.assets | Where-Object { $_.name -match '^ffmpeg-n[\d.]+-latest-win64-lgpl-[\d.]+\.zip$' } | Select-Object -First 1
-          if (-not $asset) { throw "FFmpeg LGPL build not found" }
-          Write-Host "FFmpeg $($asset.name)"
-          Invoke-WebRequest $asset.browser_download_url -OutFile tools/ffmpeg.zip
-          Expand-Archive tools/ffmpeg.zip tools/ffmpeg -Force
+          # 인증된 gh로 받는다 (익명 API는 호출 횟수 제한에 자주 걸린다). 안정판(n…)이 여럿이면 가장 높은 판.
+          New-Item -ItemType Directory -Force tools/ffdl | Out-Null
+          gh release download latest -R BtbN/FFmpeg-Builds -D tools/ffdl -p 'ffmpeg-n*-latest-win64-lgpl-[0-9]*.zip'
+          $zip = Get-ChildItem tools/ffdl -Filter *.zip | Where-Object { $_.Name -notmatch 'shared' } |
+            Sort-Object { [version](($_.Name -replace '^ffmpeg-n([\d.]+)-.*$', '$1') + '.0') } -Descending | Select-Object -First 1
+          if (-not $zip) {
+            Write-Host "Stable build not found, using master build"
+            Invoke-WebRequest https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-lgpl.zip -OutFile tools/ffdl/ffmpeg-master-latest-win64-lgpl.zip
+            $zip = Get-Item tools/ffdl/ffmpeg-master-latest-win64-lgpl.zip
+          }
+          Write-Host "FFmpeg $($zip.Name)"
+          Expand-Archive $zip.FullName tools/ffmpeg -Force
+          $asset = @{ name = $zip.Name }
           $exe = Get-ChildItem tools/ffmpeg -Filter ffmpeg.exe -Recurse | Select-Object -First 1
           $lic = Get-ChildItem tools/ffmpeg -Filter LICENSE.txt -Recurse | Select-Object -First 1
           Copy-Item $exe.FullName dist\ffmpeg.exe
