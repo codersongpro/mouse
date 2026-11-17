@@ -153,7 +153,7 @@ RecStart(area) {
     if !RecEnginePaths(&ffmpeg, &helper)
         return
     if recAskQuality {
-        q := RecAskQuality()
+        q := RecPickQuality()
         if (q = "")
             return ; 취소
         recQuality := q
@@ -197,7 +197,7 @@ RecStart(area) {
 ; ---------------- 화질 고르기 (녹화를 시작할 때마다, 기본 1080p) ----------------
 ; Enter = 1080p. Esc나 닫기 = 녹화 취소. "다음부터 묻지 않기"를 켜면 고른 화질을 저장하고
 ; 다음부터 바로 녹화한다 (설정 → 녹화 탭에서 다시 켤 수 있다).
-RecAskQuality() {
+RecPickQuality() {
     global recAskQuality, SETTINGS_PATH
     choice := ""
     g := Gui("+AlwaysOnTop -MinimizeBox -MaximizeBox +ToolWindow", "ClassZoom — 녹화 화질")
