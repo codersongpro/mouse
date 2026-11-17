@@ -33,11 +33,15 @@ recDim := "", recHint := "", recCount := ""
 ; settings.ini [Record]
 recMode := "screen"         ; "screen" = 모니터 전체 / "area" = 시작할 때 영역 지정
 recMic := true, recSys := true, recFps := 30, recFolder := ""
-recQuality := "normal"      ; "high" 고화질 / "normal" 표준 / "low" 저용량(가로 1280 이하)
+recQuality := "1080"        ; "source" 원본 해상도 / "1080" 1080p(기본) / "720" 720p
+recAskQuality := true       ; 녹화를 시작할 때마다 화질을 묻는다
 RecLoadSettings() {
     global SETTINGS_PATH, recMode, recMic, recSys, recFps, recFolder, recQuality
-    q := IniRead(SETTINGS_PATH, "Record", "Quality", "normal")
-    recQuality := (q = "high" || q = "low") ? q : "normal"
+    global recAskQuality
+    q := IniRead(SETTINGS_PATH, "Record", "Quality", "1080")
+    ; 예전 값(high/normal/low)도 읽는다
+    recQuality := (q = "source" || q = "high") ? "source" : (q = "720" || q = "low") ? "720" : "1080"
+    recAskQuality := ReadIniNum("Record", "AskQuality", 0, 1, 1) = 1
     recMode := IniRead(SETTINGS_PATH, "Record", "Mode", "screen") = "area" ? "area" : "screen"
     recMic := ReadIniNum("Record", "Mic", 0, 1, 1) = 1
     recSys := ReadIniNum("Record", "System", 0, 1, 1) = 1
@@ -46,7 +50,9 @@ RecLoadSettings() {
 }
 RecWriteSettings() {
     global SETTINGS_PATH, recMode, recMic, recSys, recFps, recFolder, recQuality
+    global recAskQuality
     IniWrite(recQuality, SETTINGS_PATH, "Record", "Quality")
+    IniWrite(recAskQuality ? 1 : 0, SETTINGS_PATH, "Record", "AskQuality")
     IniWrite(recMode, SETTINGS_PATH, "Record", "Mode")
     IniWrite(recMic ? 1 : 0, SETTINGS_PATH, "Record", "Mic")
     IniWrite(recSys ? 1 : 0, SETTINGS_PATH, "Record", "System")
@@ -146,6 +152,12 @@ RecStart(area) {
     global recMic, recSys, recFps, recQuality, REC_POLL_MS
     if !RecEnginePaths(&ffmpeg, &helper)
         return
+    if recAskQuality {
+        q := RecAskQuality()
+        if (q = "")
+            return ; 취소
+        recQuality := q
+    }
     rect := area ? RecPickArea() : RecMonitorRect()
     if !IsObject(rect)
         return
@@ -180,6 +192,45 @@ RecStart(area) {
     RecShowPill(rect)
     SetTimer(RecPoll, REC_POLL_MS)
     UpdateWidgetState()
+}
+
+; ---------------- 화질 고르기 (녹화를 시작할 때마다, 기본 1080p) ----------------
+; Enter = 1080p. Esc나 닫기 = 녹화 취소. "다음부터 묻지 않기"를 켜면 고른 화질을 저장하고
+; 다음부터 바로 녹화한다 (설정 → 녹화 탭에서 다시 켤 수 있다).
+RecAskQuality() {
+    global recAskQuality, SETTINGS_PATH
+    choice := ""
+    g := Gui("+AlwaysOnTop -MinimizeBox -MaximizeBox +ToolWindow", "ClassZoom — 녹화 화질")
+    g.BackColor := "FFFFFF"
+    g.MarginX := 20, g.MarginY := 16
+    g.SetFont("s12 bold c1E293B", "Malgun Gothic")
+    g.AddText("x20 y16 w360", "어떤 화질로 녹화할까요?")
+    g.SetFont("s10 norm c1E293B")
+    opts := [["1080", "1080p  (기본)", "선명하고 파일 크기도 알맞습니다"]
+        , ["720", "720p", "파일이 작습니다. 메일·메신저로 보내기 좋습니다"]
+        , ["source", "원본 해상도", "화면 그대로. 가장 선명하고 파일이 큽니다"]]
+    y := 52
+    for o in opts {
+        b := g.AddButton("x20 y" y " w150 h44" (A_Index = 1 ? " Default" : ""), o[2])
+        b.OnEvent("Click", ((v, *) => (choice := v, g.Hide())).Bind(o[1]))
+        g.SetFont("s9 c64748B")
+        g.AddText("x182 y" (y + 13) " w220", o[3])
+        g.SetFont("s10 c1E293B")
+        y += 52
+    }
+    chk := g.AddCheckbox("x20 y" (y + 4) " w380", "다음부터 묻지 않기 (설정 → 녹화에서 다시 켬)")
+    g.OnEvent("Close", (*) => g.Hide())
+    g.OnEvent("Escape", (*) => g.Hide())
+    g.Show("Center AutoSize")
+    RecExclude(g.Hwnd) ; 이 창은 녹화에 찍히지 않는다
+    WinWaitClose("ahk_id " g.Hwnd) ; Hide도 "닫힘"으로 본다
+    if (choice != "" && chk.Value) {
+        recAskQuality := false
+        try IniWrite(0, SETTINGS_PATH, "Record", "AskQuality")
+        try IniWrite(choice, SETTINGS_PATH, "Record", "Quality")
+    }
+    g.Destroy()
+    return choice
 }
 
 ; ---------------- 정지 ----------------

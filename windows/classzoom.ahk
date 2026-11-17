@@ -476,6 +476,11 @@ dragPenKind := "" ; 도형이 아닌 특수 펜: "laser"(레이저 펜) | "rainb
 dragOnOtherWindow := false ; 현재 드래그가 판서 오버레이가 아닌 다른 창(위젯/캡처 도구 등) 위에서 시작돼 판서를 건너뛰어야 하는지
 erasing := false ; 오른쪽 버튼으로 지우는 중인지
 lastShapeBox := [] ; 직전 미리보기 프레임이 그린 범위 (그 자리만 되돌리고 다시 합성하면 된다)
+shapeEndX := 0, shapeEndY := 0 ; 도형을 마지막으로 그린 끝점 (손을 뗄 때 기록용)
+forcedShape := ""   ; StrokeBegin이 키 대신 이 도형을 쓴다 (화살표 끝 잡아 고치기)
+dragReverse := false ; 화살표 꼬리를 잡아 고칠 때: 움직이는 점이 꼬리, 고정점이 머리
+lastArrow := ""     ; 방금 그린 화살표 {x1,y1,x2,y2,color,thick,depth} — 끝을 잡아 늘이고 줄인다
+arrowEditSaved := "" ; 고치는 동안 잠깐 바꾼 [색, 굵기]
 
 ; 드로잉 중 숫자키 1~9로 바로 바꿀 수 있는 색 (무지개 순서: 빨주노초파남보 + 검정 + 흰색).
 ; **표준 무지개값을 그대로 쓴다.** 한때 노랑과 초록을 "흰 배경에서 잘 안 보인다"는 이유로
@@ -503,7 +508,7 @@ DRAW_STEPS := [5, 5, 5, 5, 5, 5, 5, 5, 5]
 ; 글자키도 다른 용도가 없으므로 그냥 쓸 수 있다. 다만 판서 오버레이는 포커스를 가져가지
 ; 않아서(drawGui.Show("NA")) 그냥 두면 누른 글자가 뒤에 있는 프로그램에 그대로 입력된다 —
 ; 그래서 드로잉 모드일 때만 이 키들을 핫키로 잡아 삼킨다(SetDrawModeHotkeys).
-SHAPE_HOLD_KEYS := [["z", "line"], ["x", "wave"], ["c", "arrow"]]
+SHAPE_HOLD_KEYS := [["z", "line"], ["x", "wave"], ["c", "arrow"], ["v", "pulse"]] ; V = 움직이는 강조 화살표
 ; A·S는 도형이 아니라 **펜의 종류**를 바꾼다. 도형 키와 달리 **한 번 누르면 계속 그 펜**이고,
 ; 숫자키(1~9, 0)로 색을 고르면 보통 펜으로 돌아온다(사용자 결정 — 전자칠판 앞에서는 키를 쥔 채
 ; 칠판을 그을 수 없다). 드로잉을 껐다 켜도 보통 펜으로 돌아온다(색·굵기와 같다).
@@ -2463,9 +2468,9 @@ CurrentShapeMode() {
         if shapeKeyHeld.Has(pair[1]) && shapeKeyHeld[pair[1]]
             return pair[2]
     ; 수식키 둘은 "무언가를 네모나 동그라미로 둘러 강조하는" 쓰임이라 가장 누르기 쉬운 자리에 뒀다.
-    ; (ZoomIt과 여러 그림 도구는 Shift를 직선에 쓰지만, 여기서는 직선을 Z로 옮겼다 — 사용자 결정)
-    return GetKeyState("Ctrl", "P") ? "ellipse"
-        : GetKeyState("Shift", "P") ? "rect"
+    ; Ctrl = 네모, Shift = 동그라미 (2026-11-17 사용자 요청으로 Ctrl을 네모로 바꿈)
+    return GetKeyState("Ctrl", "P") ? "rect"
+        : GetKeyState("Shift", "P") ? "ellipse"
         : ""
 }
 
@@ -2752,6 +2757,7 @@ OnPointerUp(wp, lp, msg, hwnd) {
         ; 도형은 10ms마다 그리므로, 손을 뗀 자리가 아직 안 그려졌을 수 있다
         if (dragShapeMode != "")
             StrokeMove(penLastX, penLastY)
+        StrokeFinished() ; 강조 화살표 움직이기 시작·화살표 기억 (터치·펜도 마우스와 같게)
         LaserEnd() ; 레이저 펜으로 긋던 중이면 이제부터 사라지기 시작한다
     }
     penStroke := false
@@ -2778,12 +2784,16 @@ StrokeBegin(x, y) {
     ; 도형은 긋기 시작하는 순간 눌려 있던 키로 정한다. **특수 펜은 도형에도 그대로 적용된다**
     ; (사용자 요청) — 무지개 펜이면 테두리를 따라 색이 바뀌고, 레이저 펜이면 빛나는 도형이
     ; 손을 뗀 뒤 저절로 사라진다(LaserSetShape).
-    dragShapeMode := CurrentShapeMode()
+    dragShapeMode := forcedShape != "" ? forcedShape : CurrentShapeMode()
+    dragReverse := false
+    shapeEndX := x, shapeEndY := y
     dragPenKind := penKind
     strokeRainbow := (penKind = "rainbow")
     rainbowShapeHue := rainbowHue
     if dragOnOtherWindow
         return ; 다른 창 위에서 시작된 드래그 — 아무것도 그리지 않는다
+    if (dragShapeMode = "pulse")
+        return ; 강조 화살표는 판서 그림이 아니라 따로 뜬 창이다 (PulseArrow*)
     if (dragPenKind = "laser") {
         ; 레이저 펜은 판서 그림을 건드리지 않으므로 실행 취소에 남기지 않는다
         LaserBegin(x, y)
@@ -2814,11 +2824,18 @@ StrokeMove(x, y) {
             snapped := SnapTo45(dragStartX, dragStartY, x, y)
             ex := snapped[1], ey := snapped[2]
         }
+        shapeEndX := ex, shapeEndY := ey
+        if (dragShapeMode = "pulse") {
+            PulseArrowSet(dragStartX, dragStartY, ex, ey)
+            return
+        }
         if (dragPenKind = "laser") {
             ; 레이저 도형도 움직이기 전까지는 시작하지 않는다 (LaserBegin 설명 참고)
             if (LaserStarted() || x != dragStartX || y != dragStartY)
                 LaserSetShape(ShapeOutlinePoints(dragShapeMode, dragStartX, dragStartY, ex, ey, true))
-        } else
+        } else if dragReverse ; 화살표 꼬리를 잡아 고치는 중: 움직이는 점(꼬리) → 고정점(머리)
+            DrawShapePreview(dragShapeMode, ex, ey, dragStartX, dragStartY)
+        else
             DrawShapePreview(dragShapeMode, dragStartX, dragStartY, ex, ey)
         return
     } else if (dragPenKind = "laser") {
@@ -2829,6 +2846,138 @@ StrokeMove(x, y) {
     }
     lastX := x
     lastY := y
+}
+
+; 마우스 획이 끝났을 때 (손을 뗌). 화살표는 끝을 잡아 고칠 수 있게 기억하고, 강조 화살표는 움직이기 시작한다.
+StrokeFinished() {
+    global dragShapeMode, dragPenKind, dragOnOtherWindow, dragStartX, dragStartY, shapeEndX, shapeEndY
+    global dragReverse, lastArrow, undoStack, activeDrawColor, activeDrawThickness, arrowEditSaved
+    if IsObject(arrowEditSaved) { ; 고치느라 잠깐 바꾼 색·굵기를 되돌린다
+        activeDrawColor := arrowEditSaved[1], activeDrawThickness := arrowEditSaved[2]
+        arrowEditSaved := ""
+    }
+    moved := Abs(shapeEndX - dragStartX) + Abs(shapeEndY - dragStartY) >= 12
+    if (dragShapeMode = "pulse") {
+        if (moved && !dragOnOtherWindow)
+            PulseArrowStart()
+        else
+            PulseArrowClear()
+        return
+    }
+    if (dragShapeMode = "arrow" && dragPenKind = "" && !dragOnOtherWindow && moved) {
+        x1 := dragStartX, y1 := dragStartY, x2 := shapeEndX, y2 := shapeEndY
+        if dragReverse
+            x1 := shapeEndX, y1 := shapeEndY, x2 := dragStartX, y2 := dragStartY
+        lastArrow := {x1: x1, y1: y1, x2: x2, y2: y2, color: activeDrawColor, thick: activeDrawThickness, depth: undoStack.Length}
+    } else if (dragShapeMode != "" || dragPenKind != "laser")
+        lastArrow := "" ; 다른 것을 그렸으면 그 화살표는 더 고치지 않는다
+    dragReverse := false
+}
+
+; 방금 그린 화살표의 머리나 꼬리 근처를 누르면: 그 화살표를 지우고(실행 취소 한 칸),
+; 반대쪽 끝을 고정한 채 같은 색·굵기의 화살표를 다시 끌게 한다. 손을 떼면 다시 고칠 수 있다.
+ArrowEditBegin(mx, my) {
+    global lastArrow, undoStack, penKind, forcedShape, dragReverse, arrowEditSaved
+    global activeDrawColor, activeDrawThickness
+    if (!IsObject(lastArrow) || penKind != "" || CurrentShapeMode() != "")
+        return false
+    if (undoStack.Length != lastArrow.depth) ; 그 뒤에 다른 것을 그렸거나 지웠다
+        return false
+    a := lastArrow
+    tol := 16 + a.thick / 2
+    if (Sqrt((mx - a.x2) ** 2 + (my - a.y2) ** 2) <= tol)
+        fx := a.x1, fy := a.y1, rev := false ; 머리를 잡음: 꼬리 고정
+    else if (Sqrt((mx - a.x1) ** 2 + (my - a.y1) ** 2) <= tol)
+        fx := a.x2, fy := a.y2, rev := true  ; 꼬리를 잡음: 머리 고정
+    else
+        return false
+    UndoDrawing() ; 원래 화살표를 지운다
+    arrowEditSaved := [activeDrawColor, activeDrawThickness]
+    activeDrawColor := a.color, activeDrawThickness := a.thick
+    forcedShape := "arrow"
+    StrokeBegin(fx, fy)
+    forcedShape := ""
+    dragReverse := rev
+    StrokeMove(mx, my)
+    return true
+}
+
+; ---------------- 움직이는 강조 화살표 (드로잉 중 V + 드래그) ----------------
+; 끈 방향으로 화살표가 생기고, 손을 떼면 화살표 끝(머리)을 중심으로 커졌다 작아졌다를 되풀이해
+; 눈길을 끈다. 판서 그림이 아니라 따로 뜬 창이라 지우개·실행 취소와 상관없고, 새로 그리거나
+; Delete(전부 지우기)·드로잉 끄기로 사라진다. 한 번에 하나만 둔다.
+PULSE_PERIOD_MS := 1000   ; 한 번 커졌다 작아지는 시간
+PULSE_AMOUNT := 0.25      ; 가장 클 때 늘어나는 비율 (25%)
+pulseGui := "", pulseCanvas := "", pulseArrow := ""
+PulseArrowSet(x1, y1, x2, y2) {
+    global pulseArrow, activeDrawColor, activeDrawThickness
+    t := Max(6, activeDrawThickness * 1.5)
+    pulseArrow := {x1: x1, y1: y1, x2: x2, y2: y2, color: activeDrawColor, thick: t, t0: 0}
+    PulseArrowRender(1.0)
+}
+PulseArrowStart() {
+    global pulseArrow
+    if !IsObject(pulseArrow)
+        return
+    pulseArrow.t0 := A_TickCount
+    SetTimer(PulseArrowTick, 33)
+}
+PulseArrowTick() {
+    global pulseArrow, PULSE_PERIOD_MS, PULSE_AMOUNT
+    if !IsObject(pulseArrow) {
+        SetTimer(PulseArrowTick, 0)
+        return
+    }
+    ph := Mod(A_TickCount - pulseArrow.t0, PULSE_PERIOD_MS) / PULSE_PERIOD_MS
+    PulseArrowRender(1 + PULSE_AMOUNT * (0.5 - 0.5 * Cos(2 * 3.14159265 * ph)))
+}
+; 머리(x2, y2)는 제자리, 꼬리와 굵기만 s배로 그린다
+PulseArrowRender(sc) {
+    global pulseGui, pulseCanvas, pulseArrow, activeDrawThickness, PULSE_AMOUNT
+    a := pulseArrow
+    smax := 1 + PULSE_AMOUNT
+    pad := Ceil(a.thick * smax * 4 + 12)
+    ; 가장 클 때도 들어가는 상자 (창 크기·자리는 화살표가 바뀔 때만 바뀐다)
+    tx := a.x2 + (a.x1 - a.x2) * smax, ty := a.y2 + (a.y1 - a.y2) * smax
+    bx := Floor(Min(tx, a.x2)) - pad, by := Floor(Min(ty, a.y2)) - pad
+    bw := Ceil(Abs(tx - a.x2)) + 2 * pad, bh := Ceil(Abs(ty - a.y2)) + 2 * pad
+    if !IsObject(pulseGui) {
+        pulseGui := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x8080020", "ClassZoom-PulseArrow")
+        pulseGui.Show("NA x0 y0 w1 h1")
+    }
+    if (!IsObject(pulseCanvas) || pulseCanvas.w < bw || pulseCanvas.h < bh) {
+        DestroyAlphaCanvas(pulseCanvas)
+        pulseCanvas := CreateAlphaCanvas(bw + 128, bh + 128) ; 끌면서 커질 때 매번 새로 만들지 않게 여유를 둔다
+    }
+    c := pulseCanvas
+    if !c.graphics
+        return
+    DllCall("gdiplus\GdipGraphicsClear", "ptr", c.graphics, "uint", 0)
+    th := a.thick * sc
+    x2 := a.x2 - bx, y2 := a.y2 - by
+    x1 := x2 + (a.x1 - a.x2) * sc, y1 := y2 + (a.y1 - a.y2) * sc
+    saved := activeDrawThickness, activeDrawThickness := th ; 화살표 머리 크기가 굵기를 따른다 (ArrowGeometry)
+    ; 흰 테두리를 먼저 굵게 그려 어떤 배경 위에서도 잘 보이게 한다
+    for layer in [[0xFFFFFFFF, th + 6], [0xFF000000 | a.color, th]] {
+        activeDrawThickness := layer[2]
+        pPen := 0
+        DllCall("gdiplus\GdipCreatePen1", "uint", layer[1], "float", layer[2], "int", 2, "ptr*", &pPen)
+        DrawArrowGdip(c.graphics, pPen, layer[1], x1, y1, x2, y2)
+        DllCall("gdiplus\GdipDeletePen", "ptr", pPen)
+    }
+    activeDrawThickness := saved
+    PushCanvasToWindow(pulseGui.Hwnd, c, bx, by)
+    ZoomKeepOrder() ; 확대 중이면 확대 화면 아래로 (확대되어 보이게)
+}
+PulseArrowClear() {
+    global pulseGui, pulseCanvas, pulseArrow
+    SetTimer(PulseArrowTick, 0)
+    pulseArrow := ""
+    if IsObject(pulseGui)
+        try pulseGui.Destroy()
+    pulseGui := ""
+    DestroyAlphaCanvas(pulseCanvas)
+    pulseCanvas := ""
 }
 
 DrawPoll() {
@@ -2876,6 +3025,8 @@ DrawPoll() {
     ; 오른쪽 버튼을 누르고 있는 동안에는 커서가 지우개 범위를 보여주는 원으로 바뀐다
     SetBrushMode(rightDown && !drawing ? "eraser" : "pen")
     if (!leftDown && !rightDown) {
+        if drawing
+            StrokeFinished()
         drawing := false
         erasing := false
         LaserEnd() ; 레이저 펜으로 긋던 중이면 이제부터 사라지기 시작한다
@@ -2912,6 +3063,9 @@ DrawPoll() {
             ; 세어 건너뛰었는데, 캡처 도구가 툴바 클릭을 요구하는지가 Windows 버전마다 달라
             ; 첫 판서 한 획을 삼키거나 캡처 드래그가 그려지는 일이 있었다.)
         dragOnOtherWindow := winUnder != drawGui.Hwnd
+        ; 방금 그린 화살표의 끝(머리·꼬리)을 잡았으면 그 화살표를 고친다 (늘이기·줄이기·방향 바꾸기)
+        if (!dragOnOtherWindow && ArrowEditBegin(mx, my))
+            return
         StrokeBegin(mx, my)
     } else {
         ; 일반·무지개 펜은 10ms 사이에 마우스가 실제로 지나간 점들도 이어서 긋는다 (MouseTrail 설명 참고)
@@ -3354,6 +3508,7 @@ ToggleDraw(*) {
         SetDrawModeHotkeys("On")
     } else {
         SetTimer(DrawPoll, 0)
+        PulseArrowClear() ; 강조 화살표도 드로잉과 함께 사라진다
         SetTimer(DiscardUndoHistory, -UNDO_KEEP_MS) ; 끈 채로 30초 지나면 실행 취소 기록을 비운다
         SetTimer(TrimMemory, -3000) ; 화면 크기 판들을 돌려준 뒤 메모리 정리
         SetDrawModeHotkeys("Off")
@@ -3387,7 +3542,9 @@ ToggleDraw(*) {
 }
 
 ClearDrawing(*) {
-    global vh
+    global vh, lastArrow
+    PulseArrowClear()
+    lastArrow := ""
     ; 실수로 다 지웠을 때 Ctrl+Z로 되살릴 수 있게 한다. 이때는 화면 전체가 바뀌므로 전부 담는다
     ; — 실행 취소 한 단계로는 가장 큰 경우지만, 자주 하는 동작이 아니라 이대로 둔다.
     PushUndo()
@@ -3972,7 +4129,7 @@ OpenSettingsWindow(*) {
     global SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, widget, settingsGui, hideCursorOnHighlight, spotlightOn, APP_VERSION, drawOn, chkWidgetCtrl, widgetScale, widgetOpacity
     global paletteBar, PALETTE_X, PALETTE_Y, PALETTE_W, PALETTE_H, lblUpdate
     global zoomSteps, zoomSmooth
-    global recMode, recMic, recSys, recFps, recFolder, recQuality
+    global recMode, recMic, recSys, recFps, recFolder, recQuality, recAskQuality
 
     ; 판서 모드는 화면 전체를 오버레이로 덮어서 "그리기 말고는 아무것도 클릭되지 않는" 상태로
     ; 만드는 게 목적이라, 설정 창도 그 아래에 깔려 조작할 수 없다. 설정 창을 띄우려고 했다는
@@ -4106,14 +4263,16 @@ OpenSettingsWindow(*) {
     settingsGui.AddText("x54 y129 w420", "컴퓨터 소리(영상·효과음) 함께 녹음")
     chkSys.OnEvent("Click", (ctrl, *) => recSys := ctrl.Value ? true : false)
     AddSliderRow(settingsGui, 166, "초당 화면", 10, 60, recFps, "장", (v) => recFps := v, 5)
-    ; 화질: 고화질(원본 크기, 선명) / 표준 / 저용량(가로 1280 이하로 줄여 파일이 작다)
+    ; 화질: 1080p(기본) / 720p(파일 작게) / 원본 해상도. 녹화할 때마다 묻게 할 수도 있다.
     settingsGui.AddText("x30 y210 w70", "화질")
-    rdQHigh := settingsGui.AddRadio("x100 y209 w110 Group " (recQuality = "high" ? "Checked" : ""), "고화질")
-    rdQNormal := settingsGui.AddRadio("x210 y209 w110 " (recQuality = "normal" ? "Checked" : ""), "표준")
-    rdQLow := settingsGui.AddRadio("x320 y209 w200 " (recQuality = "low" ? "Checked" : ""), "저용량 (720p 정도)")
-    rdQHigh.OnEvent("Click", (*) => recQuality := "high")
-    rdQNormal.OnEvent("Click", (*) => recQuality := "normal")
-    rdQLow.OnEvent("Click", (*) => recQuality := "low")
+    rdQ1080 := settingsGui.AddRadio("x100 y209 w110 Group " (recQuality = "1080" ? "Checked" : ""), "1080p (기본)")
+    rdQ720 := settingsGui.AddRadio("x214 y209 w80 " (recQuality = "720" ? "Checked" : ""), "720p")
+    rdQSrc := settingsGui.AddRadio("x298 y209 w110 " (recQuality = "source" ? "Checked" : ""), "원본 해상도")
+    rdQ1080.OnEvent("Click", (*) => recQuality := "1080")
+    rdQ720.OnEvent("Click", (*) => recQuality := "720")
+    rdQSrc.OnEvent("Click", (*) => recQuality := "source")
+    chkAskQ := settingsGui.AddCheckbox("x412 y209 w120 " (recAskQuality ? "Checked" : ""), "매번 묻기")
+    chkAskQ.OnEvent("Click", (ctrl, *) => recAskQuality := ctrl.Value ? true : false)
     settingsGui.AddText("x30 y246 w70", "저장 폴더")
     lblRecFolder := settingsGui.AddEdit("x100 y242 w300 h24 ReadOnly", RecSaveFolder())
     btnRecFolder := settingsGui.AddButton("x406 y241 w60 h26", "바꾸기")

@@ -46,10 +46,41 @@ import ScreenCaptureKit
     // ---------- 단축키·버튼 ----------
     func toggle(area: Bool) {
         switch phase {
-        case .idle: area ? pickArea() : startOnCursorScreen()
+        case .idle:
+            guard askQuality() else { return } // 화질 고르기 (취소하면 녹화하지 않는다)
+            area ? pickArea() : startOnCursorScreen()
         case .recording, .paused: stop()
         default: break
         }
+    }
+
+    // 녹화를 시작할 때마다 화질을 묻는다 (기본 1080p, return = 1080p, esc = 취소).
+    // "다음부터 묻지 않기"를 켜면 고른 화질을 저장하고 다음부터 묻지 않는다 (설정 › 확대·녹화에서 다시 켬).
+    private func askQuality() -> Bool {
+        let s = Settings.shared
+        guard s.recAskQuality else { return true }
+        let a = NSAlert()
+        a.messageText = "어떤 화질로 녹화할까요?"
+        a.informativeText = "1080p는 선명하고 파일 크기도 알맞습니다. 720p는 파일이 작고, 원본은 화면 그대로라 가장 선명합니다."
+        a.addButton(withTitle: "1080p (기본)")
+        a.addButton(withTitle: "720p")
+        a.addButton(withTitle: "원본 해상도")
+        a.addButton(withTitle: "취소").keyEquivalent = "\u{1b}"
+        a.showsSuppressionButton = true
+        a.suppressionButton?.title = "다음부터 묻지 않기"
+        NSApp.activate(ignoringOtherApps: true)
+        let r = a.runModal()
+        let q: Double
+        switch r {
+        case .alertFirstButtonReturn: q = 1
+        case .alertSecondButtonReturn: q = 0
+        case .alertThirdButtonReturn: q = 2
+        default: return false
+        }
+        s.recQuality = q
+        if a.suppressionButton?.state == .on { s.recAskQuality = false }
+        _ = s.save()
+        return true
     }
 
     func pauseToggle() {
@@ -375,15 +406,19 @@ enum RecordError: Error, CustomStringConvertible {
     }
 }
 
-// ---------- 화질 (설정 › 확대·녹화 › 화질): 0 저용량 · 1 표준 · 2 고화질 ----------
+// ---------- 화질 (녹화 시작 창 / 설정 › 확대·녹화 › 화질): 0 720p · 1 1080p(기본) · 2 원본 ----------
 @MainActor func recordQuality() -> Int { Int(max(0, min(2, Settings.shared.recQuality.rounded()))) }
 
-// 저용량은 가로 1280 이하로 줄인다 (레티나 화면은 화소가 많아 파일이 금방 커진다)
+// 1080p는 1920×1080 안으로, 720p는 1280×720 안으로 줄인다 (레티나 화면은 화소가 많아 파일이 금방 커진다)
 @MainActor func recordSize(_ w: Int, _ h: Int) -> (Int, Int) {
-    guard recordQuality() == 0, w > 1280 else { return (w, h) }
-    var nh = Int((Double(h) * 1280 / Double(w)).rounded())
-    nh -= nh % 2
-    return (1280, max(2, nh))
+    let q = recordQuality()
+    guard q < 2 else { return (w, h) }
+    let capW = q == 0 ? 1280.0 : 1920.0, capH = q == 0 ? 720.0 : 1080.0
+    let k = min(1.0, min(capW / Double(w), capH / Double(h)))
+    guard k < 1 else { return (w, h) }
+    var nw = Int((Double(w) * k).rounded()), nh = Int((Double(h) * k).rounded())
+    nw -= nw % 2; nh -= nh % 2
+    return (max(2, nw), max(2, nh))
 }
 
 // ---------- 받은 것을 파일에 쓰기 (writeQueue에서만 돈다) ----------
@@ -403,9 +438,9 @@ final class RecordEngine: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSamp
     init(url: URL, width: Int, height: Int, system: Bool, mic: Bool, quality: Int = 1) throws {
         self.url = url
         do { writer = try AVAssetWriter(outputURL: url, fileType: .mp4) } catch { throw RecordError.writer(error.localizedDescription) }
-        // 화소 하나에 쓰는 비트 수(초당): 저용량 2 · 표준 4 · 고화질 8
-        let perPixel = [2, 4, 8][max(0, min(2, quality))]
-        let bitrate = max([1_000_000, 2_000_000, 4_000_000][max(0, min(2, quality))], width * height * perPixel)
+        // 화소 하나에 쓰는 비트 수(초당): 720p 3 · 1080p 4 · 원본 5
+        let perPixel = [3, 4, 5][max(0, min(2, quality))]
+        let bitrate = max([1_500_000, 2_500_000, 4_000_000][max(0, min(2, quality))], width * height * perPixel)
         video = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: width,

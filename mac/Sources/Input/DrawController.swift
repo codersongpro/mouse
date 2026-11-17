@@ -370,8 +370,8 @@ enum PenKind { case normal, laser, rainbow }
         if held.contains(6) { return .line }   // Z
         if held.contains(7) { return .wave }   // X
         if held.contains(8) { return .arrow }  // C
-        if f.contains(.shift) { return .rect }
-        if f.contains(.control) { return .ellipse }
+        if f.contains(.control) { return .rect }   // ⌃ = 네모
+        if f.contains(.shift) { return .ellipse }  // ⇧ = 원
         return .free
     }
 

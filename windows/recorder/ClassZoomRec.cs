@@ -324,10 +324,20 @@ namespace ClassZoom
             int x = ArgInt("x", 0), y = ArgInt("y", 0), w = ArgInt("w", 1920), h = ArgInt("h", 1080);
             int fps = Math.Max(5, Math.Min(60, ArgInt("fps", 30)));
             w -= w % 2; h -= h % 2; // H.264는 짝수 크기여야 한다
-            // 화질: high(고화질) / normal(표준) / low(저용량: 가로 1280 이하로 줄이고 비트레이트도 낮춘다)
-            string quality = Arg("quality", "normal").ToLowerInvariant();
+            // 화질: source(원본 해상도) / 1080(기본: 1920x1080 안으로) / 720(1280x720 안으로). 예전 값 high/normal/low도 받는다.
+            string quality = Arg("quality", "1080").ToLowerInvariant();
+            if (quality == "high") quality = "source"; else if (quality == "low") quality = "720"; else if (quality == "normal") quality = "1080";
             int outW = w, outH = h;
-            if (quality == "low" && w > 1280) { outW = 1280; outH = (int)Math.Round((double)h * 1280 / w); outH -= outH % 2; }
+            if (quality != "source")
+            {
+                double capW = quality == "720" ? 1280 : 1920, capH = quality == "720" ? 720 : 1080;
+                double k = Math.Min(1.0, Math.Min(capW / w, capH / h));
+                if (k < 1.0)
+                {
+                    outW = (int)Math.Round(w * k); outW -= outW % 2;
+                    outH = (int)Math.Round(h * k); outH -= outH % 2;
+                }
+            }
             bool useMic = Arg("mic", "1") == "1", useSys = Arg("sys", "1") == "1";
             Process parent = null;
             try { int pid = ArgInt("parent", 0); if (pid > 0) parent = Process.GetProcessById(pid); } catch { }
@@ -342,16 +352,16 @@ namespace ClassZoom
             if (useSys) { var s = new AudioSource("sys"); if (s.Init(true)) sources.Add(s); else Log("system audio unavailable"); }
 
             string vcodec = PickVideoCodec(ffmpeg, fps);
-            double bpp = quality == "high" ? 0.2 : quality == "low" ? 0.06 : 0.1; // 화소 하나에 쓰는 비트
-            long minRate = quality == "high" ? 4000000L : quality == "low" ? 1000000L : 2000000L;
+            double bpp = quality == "source" ? 0.15 : quality == "720" ? 0.09 : 0.11; // 화소 하나에 쓰는 비트
+            long minRate = quality == "source" ? 4000000L : quality == "720" ? 1500000L : 2500000L;
             long bitrate = Math.Max(minRate, (long)(outW * (double)outH * fps * bpp));
-            int mpegQ = quality == "high" ? 2 : quality == "low" ? 6 : 3;
+            int mpegQ = quality == "source" ? 2 : quality == "720" ? 4 : 3;
             string scale = (outW != w) ? "-vf scale=" + outW + ":" + outH + " " : "";
             // 화면 가져오기: Desktop Duplication(ddagrab)을 먼저 쓴다. 화면에 실제로 보이는 그림을 GPU에서 그대로 받아
             // 라이브 줌 창(겹친 창)도 깨지지 않고, 커서도 화면에 보이는 것 하나만 찍히며, 1080p도 30fps를 낸다.
             // GDI 방식(gdigrab)은 느리고(1080p에서 초당 10장 남짓) 겹친 창과 숨긴 커서를 제대로 담지 못해
             // 원격 데스크톱처럼 ddagrab을 못 쓸 때만 쓴다.
-            int ddaIdx, ddaLeft, ddaTop;
+            int ddaIdx = -1, ddaLeft = 0, ddaTop = 0;
             bool useDda = Arg("grab", "auto") != "gdi" && Dxgi.FindOutput(x, y, w, h, out ddaIdx, out ddaLeft, out ddaTop, Log);
             Log("video " + w + "x" + h + " -> " + outW + "x" + outH + "@" + fps + " " + vcodec + " " + quality + " " + bitrate + ", audio sources " + sources.Count);
 

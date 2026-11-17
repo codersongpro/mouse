@@ -456,9 +456,9 @@ ZoomTopHwnds() {
 
 ; 확대 화면 안에 들어가야 하는 우리 창들 (확대 창보다 아래에 있어야 한다)
 ZoomBelowHwnds() {
-    global drawGui, laserGui, boardGui, brushGui, widget
+    global drawGui, laserGui, boardGui, brushGui, widget, pulseGui
     m := Map()
-    for g in [drawGui, laserGui, boardGui, brushGui]
+    for g in [drawGui, laserGui, boardGui, brushGui, pulseGui]
         try m[g.Hwnd] := true
     if (IsSet(widget) && widget) ; 위젯도 확대 화면 안에 — 보이는 자리 그대로 누를 수 있게
         try m[widget.Hwnd] := true

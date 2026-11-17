@@ -101,6 +101,7 @@ enum SettingsSchema {
             flag("Record", "System", \.recSys, true),
             num("Record", "Fps", \.recFps, 30, 10...60),
             num("Record", "Quality", \.recQuality, 1, 0...2),
+            flag("Record", "AskQuality", \.recAskQuality, true),
         ]
         for i in 0..<9 {
             t.append(color("DrawKeys", "Color\(i + 1)", \.drawKeyColors[i], DRAW_COLORS[i]))

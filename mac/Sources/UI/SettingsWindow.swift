@@ -76,7 +76,7 @@ enum SettingsLayout {
         for r in drawKeys { ids.insert(r.color); ids.insert(r.opacity); if let s = r.step { ids.insert(s) } }
         ids.formUnion(widget.fields.map(\.id)); ids.insert(widgetShow); ids.insert(trayShow)
         ids.formUnion(zoom.fields.map(\.id)); ids.insert(zoomSmooth)
-        ids.formUnion(record.fields.map(\.id)); ids.insert(recMic); ids.insert(recSys); ids.insert("Record.Quality")
+        ids.formUnion(record.fields.map(\.id)); ids.insert(recMic); ids.insert(recSys); ids.insert("Record.Quality"); ids.insert("Record.AskQuality")
         return ids
     }
 }
@@ -563,12 +563,13 @@ struct SettingsView: View {
             GroupBoxView(g: SettingsLayout.record)
             Card(title: "화질") {
                 Picker("", selection: valueBinding("Record.Quality")) {
-                    Text("고화질").tag(2.0)
-                    Text("표준").tag(1.0)
-                    Text("저용량 (720p 정도)").tag(0.0)
+                    Text("1080p (기본)").tag(1.0)
+                    Text("720p").tag(0.0)
+                    Text("원본 해상도").tag(2.0)
                 }
                 .labelsHidden().pickerStyle(.segmented)
-                Text("고화질은 선명하지만 파일이 큽니다. 저용량은 가로 1280 이하로 줄여 저장합니다.")
+                Toggle("녹화를 시작할 때마다 화질 묻기", isOn: flagBinding("Record.AskQuality"))
+                Text("1080p는 선명하고 파일 크기도 알맞습니다. 720p는 파일이 작고, 원본은 화면 그대로라 가장 선명합니다.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Card(title: "녹음") {

@@ -69,12 +69,12 @@ enum KeyboardLayout {
         ] + plain("TYUIOP[]") + [mod("\\", 1.5)]
         let r3: [Cap] = [mod("caps lock", 1.75), Cap(label: "A", role: "레이저 펜", rgb: s.drawColor, bar: .laser), Cap(label: "S", role: "무지개 펜", bar: .rainbow)]
             + plain("DFGHJKL;'") + [mod("return", 2.25)]
-        let shiftL = Cap(label: "shift", role: "사각형", bar: .rect, width: 2.25)
-        let shiftR = Cap(label: "shift", role: "사각형", bar: .rect, width: 2.75)
+        let shiftL = Cap(label: "shift", role: "원", bar: .ellipse, width: 2.25)
+        let shiftR = Cap(label: "shift", role: "원", bar: .ellipse, width: 2.75)
         let r4: [Cap] = [shiftL, Cap(label: "Z", role: "직선", bar: .line), Cap(label: "X", role: "물결", bar: .wave), Cap(label: "C", role: "화살표", bar: .arrow)]
             + plain("VBNM,./") + [shiftR]
         // 맨 아래 줄: ⌃ = 원, ⌥ = 지우개 (끌면서 함께 누르는 키)
-        let r5: [Cap] = [mod("fn"), Cap(label: "control", role: "원", bar: .ellipse), Cap(label: "option", role: "지우개", bar: .eraser), mod("command", 1.25),
+        let r5: [Cap] = [mod("fn"), Cap(label: "control", role: "네모", bar: .rect), Cap(label: "option", role: "지우개", bar: .eraser), mod("command", 1.25),
                          mod("space", 5), mod("command", 1.25), Cap(label: "option", role: "지우개", bar: .eraser),
                          Cap(label: "←", role: "가늘게"),
                          Cap(label: "", active: false, height: 1, subs: [Cap(label: "↑", role: "진하게", height: 0.5), Cap(label: "↓", role: "연하게", height: 0.5)]),
@@ -250,8 +250,8 @@ struct KeyboardView: View {
             HStack(alignment: .top, spacing: 12) {
                 GuideCard(title: "마우스로 그리기", dot: Color(red: 0.25, green: 0.56, blue: 0.95), rows: [
                     (["드래그"], "자유선 그리기"),
-                    (["⇧", "+", "드래그"], "사각형"),
-                    (["⌃", "+", "드래그"], "원"),
+                    (["⌃", "+", "드래그"], "네모"),
+                    (["⇧", "+", "드래그"], "원"),
                     (["Z X C", "+", "드래그"], "직선 · 물결 · 화살표"),
                     (["Z X C", "+", "⇧", "+", "드래그"], "0° · 45° · 90°로 맞춤"),
                     (["두 손가락 스크롤", "·", "↑ ↓"], "진하게 · 연하게"),

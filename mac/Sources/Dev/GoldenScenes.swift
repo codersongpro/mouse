@@ -34,8 +34,8 @@ extension Golden {
 
         func shapes(_ s: Sim) {
             s.key(K.n1)
-            s.stroke([s.P(50, 40), s.P(220, 150)], .shift)                                   // 사각형
-            s.key(K.n5); s.stroke([s.P(260, 40), s.P(430, 150)], .control)                  // 원
+            s.stroke([s.P(50, 40), s.P(220, 150)], .control)                                 // 네모
+            s.key(K.n5); s.stroke([s.P(260, 40), s.P(430, 150)], .shift)                    // 원
             s.key(K.n4); s.hold(K.z) { s.stroke([s.P(50, 210), s.P(240, 260)]) }            // 직선
             s.key(K.n3); s.hold(K.x) { s.stroke([s.P(270, 210), s.P(480, 270)]) }           // 물결
             s.key(K.n2); s.hold(K.c) { s.stroke([s.P(460, 60), s.P(600, 190)]) }            // 화살표
