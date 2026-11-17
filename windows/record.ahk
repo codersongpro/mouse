@@ -48,7 +48,7 @@ RecWriteSettings() {
 }
 
 ; 저장 폴더: 설정에서 고른 곳, 없으면 "동영상\ClassZoom"
-RecFolder() {
+RecSaveFolder() {
     global recFolder
     if (recFolder != "")
         return recFolder
@@ -104,7 +104,7 @@ RecStart(area) {
     rect := area ? RecPickArea() : RecMonitorRect()
     if !IsObject(rect)
         return
-    folder := RecFolder()
+    folder := RecSaveFolder()
     try DirCreate(folder)
     catch {
         MsgBox("녹화를 저장할 폴더를 만들 수 없습니다.`n" folder "`n`n설정 → 녹화 탭에서 다른 폴더를 고르세요.", "ClassZoom — 녹화", "Icon!")

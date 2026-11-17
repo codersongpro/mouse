@@ -4050,11 +4050,11 @@ OpenSettingsWindow(*) {
     chkSys.OnEvent("Click", (ctrl, *) => recSys := ctrl.Value ? true : false)
     AddSliderRow(settingsGui, 166, "초당 화면", 10, 60, recFps, "장", (v) => recFps := v, 5)
     settingsGui.AddText("x30 y212 w70", "저장 폴더")
-    lblRecFolder := settingsGui.AddEdit("x100 y208 w300 h24 ReadOnly", RecFolder())
+    lblRecFolder := settingsGui.AddEdit("x100 y208 w300 h24 ReadOnly", RecSaveFolder())
     btnRecFolder := settingsGui.AddButton("x406 y207 w60 h26", "바꾸기")
     btnRecOpen := settingsGui.AddButton("x470 y207 w60 h26", "열기")
-    btnRecFolder.OnEvent("Click", (*) => (d := DirSelect("*" RecFolder(), 3, "녹화 파일을 저장할 폴더를 고르세요"), d != "" ? (recFolder := d, lblRecFolder.Value := d) : 0))
-    btnRecOpen.OnEvent("Click", (*) => (DirCreate(RecFolder()), Run('explorer.exe "' RecFolder() '"')))
+    btnRecFolder.OnEvent("Click", (*) => (d := DirSelect("*" RecSaveFolder(), 3, "녹화 파일을 저장할 폴더를 고르세요"), d != "" ? (recFolder := d, lblRecFolder.Value := d) : 0))
+    btnRecOpen.OnEvent("Click", (*) => (DirCreate(RecSaveFolder()), Run('explorer.exe "' RecSaveFolder() '"')))
     settingsGui.AddText("x30 y252 w500 h2 0x10")
     lblRecHelp := settingsGui.AddText("x30 y264 w500 h260"
         , "• F10: 녹화 시작 · 정지   /   Ctrl + F10: 일시정지 · 계속`n"
