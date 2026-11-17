@@ -413,6 +413,8 @@ ZoomTopHwnds() {
     for side in ["L", "R"]
         try list.Push(clickAnim[side].gui.Hwnd)
     try list.Push(stepGui.Hwnd)
+    for h in RecTopHwnds() ; 녹화 표시창·카운트다운·영역 테두리 (record.ahk)
+        list.Push(h)
     if IsObject(zoomCursorGui)
         try list.Push(zoomCursorGui.Hwnd) ; 맨 위 — 다른 것에 가려지지 않게 마지막에 올린다
     return list

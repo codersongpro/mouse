@@ -87,6 +87,57 @@ jobs:
           if ($p.ExitCode -ne 0 -or -not (Test-Path $out)) { throw "Compile failed ($($p.ExitCode))" }
           Get-Item $out | Format-List Name, Length, VersionInfo
 
+      # 녹화 도우미: .NET Framework 4의 C# 컴파일러(Windows에 기본 포함)로 빌드한다
+      - name: Build recorder helper
+        run: |
+          $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $csc /nologo /target:winexe /optimize+ /out:dist\classzoom-rec.exe windows\recorder\ClassZoomRec.cs
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path dist\classzoom-rec.exe)) { throw "Recorder build failed" }
+          Get-Item dist\classzoom-rec.exe | Format-List Name, Length
+
+      # 녹화 엔진: FFmpeg LGPL 빌드 (BtbN/FFmpeg-Builds). ffmpeg.exe와 라이선스만 쓴다.
+      - name: Download FFmpeg (LGPL)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $hdr = @{ Authorization = "Bearer $env:GH_TOKEN" }
+          $rel = Invoke-RestMethod https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest -Headers $hdr
+          $asset = $rel.assets | Where-Object { $_.name -match '^ffmpeg-n[\d.]+-latest-win64-lgpl-[\d.]+\.zip$' } | Select-Object -First 1
+          if (-not $asset) { throw "FFmpeg LGPL build not found" }
+          Write-Host "FFmpeg $($asset.name)"
+          Invoke-WebRequest $asset.browser_download_url -OutFile tools/ffmpeg.zip
+          Expand-Archive tools/ffmpeg.zip tools/ffmpeg -Force
+          $exe = Get-ChildItem tools/ffmpeg -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+          $lic = Get-ChildItem tools/ffmpeg -Filter LICENSE.txt -Recurse | Select-Object -First 1
+          Copy-Item $exe.FullName dist\ffmpeg.exe
+          Copy-Item $lic.FullName dist\FFmpeg-LICENSE.txt
+          & dist\ffmpeg.exe -hide_banner -version | Select-Object -First 1 | Tee-Object -FilePath dist\ffmpeg-version.txt
+          $enc = & dist\ffmpeg.exe -hide_banner -encoders 2>$null | Select-String 'h264_mf|aac |mpeg4 '
+          $enc | ForEach-Object { Write-Host $_ }
+          "asset=$($asset.name)" >> $env:GITHUB_ENV
+
+      # 실제로 5초 녹화해 본다 (빌드 서버에는 소리 장치가 없어 화면만 녹화된다)
+      - name: Smoke test recording
+        continue-on-error: true
+        run: |
+          $t = Join-Path $env:RUNNER_TEMP 'rec'
+          New-Item -ItemType Directory -Force $t | Out-Null
+          $out = Join-Path $t 'test.mp4'
+          Set-Content -Path "$t\ctl" -Value 'rec' -NoNewline
+          $p = Start-Process dist\classzoom-rec.exe -PassThru -ArgumentList "--ffmpeg=$PWD\dist\ffmpeg.exe", "--out=$out", "--control=$t\ctl", "--status=$t\status", "--log=$t\log", '--x=0', '--y=0', '--w=640', '--h=480', '--fps=15', '--mic=1', '--sys=1'
+          Start-Sleep 3
+          Set-Content -Path "$t\ctl" -Value 'pause' -NoNewline
+          Start-Sleep 1
+          Set-Content -Path "$t\ctl" -Value 'rec' -NoNewline
+          Start-Sleep 3
+          Set-Content -Path "$t\ctl" -Value 'stop' -NoNewline
+          $p.WaitForExit(90000) | Out-Null
+          Write-Host "--- status"; Get-Content "$t\status" -ErrorAction SilentlyContinue
+          Write-Host "--- log"; Get-Content "$t\log" -ErrorAction SilentlyContinue
+          if (-not (Test-Path $out)) { Write-Host "::warning::Smoke test produced no video"; exit 1 }
+          Get-Item $out | Format-List Name, Length
+          & dist\ffmpeg.exe -hide_banner -i $out 2>&1 | Select-String 'Duration|Stream'
+
       - name: Package zip
         id: pkg
         run: |
@@ -94,8 +145,22 @@ jobs:
           $dir = 'dist/ClassZoom'
           New-Item -ItemType Directory -Force $dir | Out-Null
           Move-Item dist/classzoom.exe $dir
+          Move-Item dist/classzoom-rec.exe $dir
+          Move-Item dist/ffmpeg.exe $dir
           Copy-Item windows/사용안내.txt $dir
           Copy-Item LICENSE "$dir/LICENSE.txt"
+          # FFmpeg은 LGPL 2.1로 배포된다: 라이선스 전문과 출처를 함께 넣는다
+          New-Item -ItemType Directory -Force "$dir/licenses" | Out-Null
+          Move-Item dist/FFmpeg-LICENSE.txt "$dir/licenses/FFmpeg-LICENSE.txt"
+          $ffver = Get-Content dist/ffmpeg-version.txt -Raw
+          @"
+          ClassZoom은 화면 녹화에 FFmpeg(ffmpeg.exe)을 사용합니다.
+          FFmpeg is licensed under the GNU Lesser General Public License (LGPL) version 2.1.
+          $ffver
+          Build: $env:asset  (https://github.com/BtbN/FFmpeg-Builds)
+          Source code: https://ffmpeg.org/download.html  /  https://github.com/FFmpeg/FFmpeg
+          ffmpeg.exe는 수정하지 않은 그대로이며, 같은 이름의 다른 FFmpeg 빌드로 바꿔 써도 됩니다.
+          "@ -replace '(?m)^\s+', '' | Set-Content "$dir/licenses/THIRD-PARTY.txt" -Encoding utf8
           $zip = "dist/ClassZoom-$v.zip"
           Compress-Archive -Path $dir -DestinationPath $zip -Force
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash

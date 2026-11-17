@@ -35,7 +35,7 @@ HotkeyText(combo) {
 
 ShowUsageGuide(*) {
     global usageGui, showGuideOnStart, hotkeyCombos
-    global ICON_SPOT_DARK_PATH, ICON_DRAW_DARK_PATH, ICON_ZOOM_DARK_PATH, ICON_SETTINGS_PATH
+    global ICON_SPOT_DARK_PATH, ICON_DRAW_DARK_PATH, ICON_ZOOM_DARK_PATH, ICON_SETTINGS_PATH, ICON_REC_PATH
     if IsObject(usageGui)
         try usageGui.Destroy()
 
@@ -51,12 +51,14 @@ ShowUsageGuide(*) {
 
     ; ---- 위젯 버튼 네 개 ----
     rows := [
-        [ICON_SPOT_DARK_PATH, "마우스 강조", HotkeyText(hotkeyCombos["Spotlight"])
+        [ICON_SPOT_DARK_PATH, "마우스 하이라이트", HotkeyText(hotkeyCombos["Spotlight"])
             , "커서 주위를 노란 원으로 강조합니다. 클릭하면 원이 오므라듭니다."],
-        [ICON_DRAW_DARK_PATH, "화면에 그리기", HotkeyText(hotkeyCombos["Draw"])
+        [ICON_DRAW_DARK_PATH, "드로잉", HotkeyText(hotkeyCombos["Draw"])
             , "드래그해서 그립니다. Esc를 누르면 지우고 끕니다."],
-        [ICON_ZOOM_DARK_PATH, "화면 확대", HotkeyText(hotkeyCombos["Zoom"])
+        [ICON_ZOOM_DARK_PATH, "라이브 줌", HotkeyText(hotkeyCombos["Zoom"])
             , "누를 때마다 1단계 → 2단계 → 3단계 → 끄기. 영상도 그대로 움직입니다."],
+        [ICON_REC_PATH, "화면 녹화", HotkeyText(hotkeyCombos["Record"])
+            , "3·2·1 뒤 녹화를 시작하고 다시 누르면 MP4로 저장합니다. 마이크·컴퓨터 소리도 함께."],
         [ICON_SETTINGS_PATH, "설정", "위젯 버튼"
             , "색·굵기·확대 배율·단축키를 바꿉니다."]]
     y := 84
@@ -78,15 +80,19 @@ ShowUsageGuide(*) {
         ["Ctrl + 마우스 휠", "확대 단계 올리기 / 내리기"],
         ["Esc", "확대 끄기"],
         ["가장자리로 이동", "확대 화면이 그쪽으로 움직입니다 (평소에는 화면 고정)"],
-        [HotkeyText(hotkeyCombos["Draw"]) " (그리기)", "확대된 화면 위에 그대로 그립니다"],
+        [HotkeyText(hotkeyCombos["Draw"]) " (드로잉)", "확대된 화면 위에 그대로 그립니다"],
         ["화면 공유", "Zoom·Meet에서 '화면 전체'를 고르면 확대 화면이 그대로 보입니다"]])
-    GuideSection(g, &y, "그리는 중", [
+    GuideSection(g, &y, "녹화", [
+        [HotkeyText(hotkeyCombos["RecordPause"]), "일시정지 / 계속"],
+        [HotkeyText(hotkeyCombos["RecordArea"]), "영역을 골라 그 부분만 녹화"],
+        ["저장 위치", "동영상\ClassZoom 폴더 (설정 → 녹화에서 바꿈)"]])
+    GuideSection(g, &y, "드로잉 중", [
         ["Shift / Ctrl + 드래그", "사각형 / 원"],
         ["Z / X / C + 드래그", "직선 / 물결 / 화살표"],
         ["1 ~ 9,  0", "색 바꾸기,  기본 색"],
         ["오른쪽 버튼 드래그", "지우개"],
         ["Ctrl + Z  /  Delete", "되돌리기  /  전부 지우기"]])
-    btnKeys := g.AddButton("x24 y" (y + 2) " w200 h30", "그리기 단축키 전체 보기")
+    btnKeys := g.AddButton("x24 y" (y + 2) " w200 h30", "드로잉 단축키 전체 보기")
     btnKeys.OnEvent("Click", ShowShortcutGuide)
     y += 46
 

@@ -9,7 +9,7 @@
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
 ;@Ahk2Exe-SetDescription ClassZoom - 실시간 화면 확대 / 마우스 강조 / 화면 드로잉
-;@Ahk2Exe-SetVersion 1.0.3
+;@Ahk2Exe-SetVersion 1.1.0
 ;@Ahk2Exe-SetCopyright ClassZoom (c) 2026 codersongpro. MIT License
 
 Persistent()
@@ -24,7 +24,7 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.0.3"
+APP_VERSION := "1.1.0"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
@@ -53,6 +53,7 @@ FileInstall("..\shared\icon_spotlight_color.png", A_Temp "\cz_btn_spotlight.png"
 FileInstall("..\shared\icon_draw_color.png", A_Temp "\cz_btn_draw.png", true)
 FileInstall("..\shared\icon_settings_color.png", A_Temp "\cz_btn_settings.png", true)
 FileInstall("..\shared\icon_zoom_color.png", A_Temp "\cz_btn_zoom.png", true)
+FileInstall("..\shared\icon_record_color.png", A_Temp "\cz_btn_record.png", true)
 ; 설정 창의 "드로잉 모드 단축키 보기" 버튼이 띄우는 안내 그림. 아이콘과 달리 화면에 그대로 보여주기만
 ; 하므로 색을 입히거나 하지 않는다. (그림을 바꾸려면 shortcuts.png만 갈아끼우면 된다)
 FileInstall("shortcuts.png", A_Temp "\cz_shortcuts.png", true)
@@ -60,6 +61,7 @@ ICON_SPOT_DARK_PATH := A_Temp "\cz_btn_spotlight.png"
 ICON_DRAW_DARK_PATH := A_Temp "\cz_btn_draw.png"
 ICON_SETTINGS_PATH := A_Temp "\cz_btn_settings.png"
 ICON_ZOOM_DARK_PATH := A_Temp "\cz_btn_zoom.png"
+ICON_REC_PATH := A_Temp "\cz_btn_record.png"
 SHORTCUT_IMAGE_PATH := A_Temp "\cz_shortcuts.png"
 
 ; ================= GDI+ 초기화 (PNG 아이콘 불러오기/색 입히기용) =================
@@ -74,8 +76,13 @@ DllCall("gdiplus\GdiplusStartup", "ptr*", &gdipToken, "ptr", gdipStartupInput, "
 ; 지우기는 전역 단축키로 두지 않는다. 드로잉 모드가 꺼져 있으면 그린 내용이 화면에 보이지도
 ; 않아서 그때 지울 일이 없고, 드로잉 중에는 Delete와 Esc가 같은 일을 한다. 전역 단축키는
 ; 하나 등록할 때마다 그 키를 Windows 전체에서 빼앗으므로, 값어치가 낮은 것은 두지 않는 게 낫다.
-HOTKEY_DEFAULTS := Map("Spotlight", "F8", "Draw", "F9", "Zoom", "F7")
-HOTKEY_LABELS := Map("Spotlight", "강조", "Draw", "드로잉", "Zoom", "확대")
+HOTKEY_DEFAULTS := Map("Spotlight", "F8", "Draw", "F9", "Zoom", "F7"
+    , "Record", "F10", "RecordPause", "^F10", "RecordArea", "^+F10")
+HOTKEY_LABELS := Map("Spotlight", "하이라이트", "Draw", "드로잉", "Zoom", "라이브 줌"
+    , "Record", "녹화", "RecordPause", "일시정지", "RecordArea", "영역 녹화")
+; 녹화 단축키는 앞 프로그램에 넘기지 않고 삼킨다. F10은 대부분의 프로그램에서 메뉴 막대를 여는
+; 키라서, 넘기면 녹화를 시작·정지할 때마다 앞 프로그램의 메뉴가 열린다.
+HOTKEY_NO_PASS := Map("Record", 1, "RecordPause", 1, "RecordArea", 1)
 hotkeyCombos := Map()     ; 지금 설정된 조합 (settings.ini에서 불러옴)
 hotkeyRegistered := Map() ; 실제로 등록에 성공해 살아있는 조합 (해제할 때 필요)
 hotkeyApplying := false   ; 값을 되돌리느라 Change가 다시 불려 무한히 반복되는 것을 막는 빗장
@@ -173,6 +180,7 @@ PxToStep(px, basePx, ratio) {
 ; 확대 기능은 따로 떼어 둔 파일에 있다. LoadSettings()가 확대 설정도 읽으므로 그보다 위에서 불러온다.
 #Include zoom.ahk
 #Include guide.ahk ; 처음 실행할 때 뜨는 사용 방법 안내 창
+#Include record.ahk ; 화면 녹화 (도우미 classzoom-rec.exe + ffmpeg.exe)
 
 ; ================= 설정값 (settings.ini에서 불러옴, 없으면 기본값) =================
 ; spotOpacity는 0~100(%)로 저장/표시하고, 실제 WinSetTransparent에 쓸 때만 0~255로 환산한다.
@@ -244,6 +252,7 @@ LoadSettings() {
     }
     ZoomLoadSettings() ; [Zoom] 단계 배율·부드럽게 (zoom.ahk)
     GuideLoadSettings() ; [Common] ShowGuide (guide.ahk)
+    RecLoadSettings() ; [Record] (record.ahk)
 }
 
 ; 저장에 성공하면 참을 돌려준다.
@@ -311,6 +320,7 @@ WriteSettings() {
     SavePalette()
     ZoomWriteSettings() ; [Zoom] (zoom.ahk)
     GuideWriteSettings() ; [Common] ShowGuide (guide.ahk)
+    RecWriteSettings() ; [Record] (record.ahk)
     return true
 }
 
@@ -3905,6 +3915,7 @@ OpenSettingsWindow(*) {
     global SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, widget, settingsGui, hideCursorOnHighlight, spotlightOn, APP_VERSION, drawOn, chkWidgetCtrl, widgetScale, widgetOpacity
     global paletteBar, PALETTE_X, PALETTE_Y, PALETTE_W, PALETTE_H, lblUpdate
     global zoomSteps, zoomSmooth
+    global recMode, recMic, recSys, recFps, recFolder
 
     ; 판서 모드는 화면 전체를 오버레이로 덮어서 "그리기 말고는 아무것도 클릭되지 않는" 상태로
     ; 만드는 게 목적이라, 설정 창도 그 아래에 깔려 조작할 수 없다. 설정 창을 띄우려고 했다는
@@ -3939,7 +3950,8 @@ OpenSettingsWindow(*) {
     ; 같은 목적의 기능이라 나눠 둘 이유가 없었고, 나뉘어 있으면 클릭효과의 색이 하이라이트와
     ; 다른 색이라는 것도 눈에 안 들어온다. 대신 탭 안에서 테두리 상자로 셋을 갈라둔다.
     ; "확대" 탭을 더해 여섯 개다 — 위 설명대로 이 너비에서 한 줄에 들어간다.
-    tabs := settingsGui.AddTab3("x10 y10 w460 h552", ["일반", "포커스", "드로잉", "확대", "위젯", "단축키"])
+    ; "녹화" 탭까지 일곱 개라 창을 넓혔다 (여섯 개까지가 w460에 한 줄로 들어갔다).
+    tabs := settingsGui.AddTab3("x10 y10 w540 h552", ["일반", "포커스", "드로잉", "확대", "녹화", "위젯", "단축키"])
 
     tabs.UseTab("포커스")
     ; --- 하이라이트 ---
@@ -4023,6 +4035,38 @@ OpenSettingsWindow(*) {
         . "  공유할 때는 '창'이 아니라 '화면 전체'를 고르세요.")
     lblZoomHelp.SetFont("s9 c555555")
 
+    tabs.UseTab("녹화")
+    ; 화면 녹화 (record.ahk). 저장을 눌러야 다음 실행에도 남는다([Record]).
+    settingsGui.AddText("x30 y56 w90", "녹화 범위")
+    rdScreen := settingsGui.AddRadio("x120 y55 w180 Group " (recMode = "screen" ? "Checked" : ""), "모니터 전체")
+    rdArea := settingsGui.AddRadio("x300 y55 w200 " (recMode = "area" ? "Checked" : ""), "시작할 때 영역 지정")
+    rdScreen.OnEvent("Click", (*) => recMode := "screen")
+    rdArea.OnEvent("Click", (*) => recMode := "area")
+    chkMic := settingsGui.AddCheckbox("x30 y96 w20 h20 " (recMic ? "Checked" : ""), "")
+    settingsGui.AddText("x54 y97 w420", "마이크 소리(목소리) 함께 녹음 — Windows 기본 녹음 장치")
+    chkMic.OnEvent("Click", (ctrl, *) => recMic := ctrl.Value ? true : false)
+    chkSys := settingsGui.AddCheckbox("x30 y128 w20 h20 " (recSys ? "Checked" : ""), "")
+    settingsGui.AddText("x54 y129 w420", "컴퓨터 소리(영상·효과음) 함께 녹음")
+    chkSys.OnEvent("Click", (ctrl, *) => recSys := ctrl.Value ? true : false)
+    AddSliderRow(settingsGui, 166, "초당 화면", 10, 60, recFps, "장", (v) => recFps := v, 5)
+    settingsGui.AddText("x30 y212 w70", "저장 폴더")
+    lblRecFolder := settingsGui.AddEdit("x100 y208 w300 h24 ReadOnly", RecFolder())
+    btnRecFolder := settingsGui.AddButton("x406 y207 w60 h26", "바꾸기")
+    btnRecOpen := settingsGui.AddButton("x470 y207 w60 h26", "열기")
+    btnRecFolder.OnEvent("Click", (*) => (d := DirSelect("*" RecFolder(), 3, "녹화 파일을 저장할 폴더를 고르세요"), d != "" ? (recFolder := d, lblRecFolder.Value := d) : 0))
+    btnRecOpen.OnEvent("Click", (*) => (DirCreate(RecFolder()), Run('explorer.exe "' RecFolder() '"')))
+    settingsGui.AddText("x30 y252 w500 h2 0x10")
+    lblRecHelp := settingsGui.AddText("x30 y264 w500 h260"
+        , "• F10: 녹화 시작 · 정지   /   Ctrl + F10: 일시정지 · 계속`n"
+        . "• Ctrl + Shift + F10: 마우스로 영역을 골라 그 부분만 녹화`n"
+        . "• 위젯의 녹화 버튼을 누르면 시작 · 정지, 오른쪽 클릭하면 범위를 고릅니다.`n`n"
+        . "• 3 · 2 · 1 카운트다운 뒤에 녹화가 시작됩니다.`n"
+        . "• 녹화 중에는 화면 위쪽 표시창에서 일시정지 · 정지할 수 있습니다.`n"
+        . "  카운트다운과 표시창은 영상에 찍히지 않습니다.`n"
+        . "• 끝나면 MP4 파일로 저장하고 폴더를 열어 줍니다.`n"
+        . "• 라이브 줌 · 하이라이트 · 드로잉도 그대로 녹화됩니다.")
+    lblRecHelp.SetFont("s9 c555555")
+
     tabs.UseTab("위젯")
     chkWidget := settingsGui.AddCheckbox("x30 y52 w20 h20 " (showWidget ? "Checked" : ""), "")
     settingsGui.AddText("x54 y53 w300", "위젯 활성화")
@@ -4092,14 +4136,17 @@ OpenSettingsWindow(*) {
     AddHotkeyRow(settingsGui, 50, "Spotlight")
     AddHotkeyRow(settingsGui, 90, "Draw")
     AddHotkeyRow(settingsGui, 130, "Zoom")
-    lblHotkeyHelp := settingsGui.AddText("x30 y166 w420 h32", "단축키를 직접 눌러 지정할 수 있습니다.  Ctrl이나 Alt키가 포함되어야 합니다.")
+    AddHotkeyRow(settingsGui, 170, "Record")
+    AddHotkeyRow(settingsGui, 210, "RecordPause")
+    AddHotkeyRow(settingsGui, 250, "RecordArea")
+    lblHotkeyHelp := settingsGui.AddText("x30 y288 w420 h32", "단축키를 직접 눌러 지정할 수 있습니다.  Ctrl이나 Alt키가 포함되어야 합니다.")
     lblHotkeyHelp.SetFont("s9 c999999")
 
     ; 드로잉 중에만 쓰는 키(도형·색·굵기·지우기)는 여기 글로 늘어놓지 않는다. **키보드 그림
     ; 한 장이 그 일을 더 잘한다** — 어느 키를 눌러야 하는지 자리로 바로 보이고, 지금 설정된
     ; 색까지 그림 아래에 함께 뜬다. 예전에는 열네 줄짜리 목록이 이 자리에 있었는데, 같은 내용을
     ; 두 군데 적어두면 한쪽만 고쳐져 어긋나기 마련이라 그림 쪽으로 몰았다.
-    btnShortcutGuide := settingsGui.AddButton("x130 y218 w220 h36", "드로잉 모드 단축키 보기")
+    btnShortcutGuide := settingsGui.AddButton("x130 y330 w220 h36", "드로잉 모드 단축키 보기")
     btnShortcutGuide.OnEvent("Click", ShowShortcutGuide)
 
     tabs.UseTab()
@@ -4122,7 +4169,7 @@ OpenSettingsWindow(*) {
     UpdatePaletteScrollBar()
     tabs.OnEvent("Change", (ctrl, *) => ShowPalettePanel(ctrl.Text = "드로잉"))
 
-    settingsGui.Show("w480 h628")
+    settingsGui.Show("w560 h628")
     StartUpdateCheck()
 }
 
@@ -4466,6 +4513,7 @@ TRAY_ON_COLOR := 0x0A84FF
 ICON_KEEP_COLOR := -1
 CHIP_OFF_FILL := 0xFFFFFF
 CHIP_ON_FILL := 0xBFDBFE
+CHIP_REC_FILL := 0xFECACA ; 녹화 중
 
 RenderButtonBitmap(fillColor, bgColor, size, corner, iconPath, iconSize, iconColor) {
     hdcScreen := DllCall("GetDC", "ptr", 0, "ptr")
@@ -4560,6 +4608,7 @@ BuildWidget() {
     global widget, grip, btnSpotOff, btnSpotOn, btnDrawOff, btnDrawOn, btnSettings, btnClose
     global hBtnSpotOff, hBtnSpotOn, hBtnDrawOff, hBtnDrawOn, hBtnSettings
     global btnZoomOff, btnZoomOn, hBtnZoomOff, hBtnZoomOn, ICON_ZOOM_DARK_PATH, zoomOn
+    global btnRecOff, btnRecOn, hBtnRecOff, hBtnRecOn, ICON_REC_PATH, recState, CHIP_REC_FILL
     global widgetW, widgetH, widgetScale, widgetBgColor, widgetX, widgetY
     global CHIP_SIZE, CHIP_CORNER, CHIP_ICON_SIZE, ICON_OFF_COLOR, TRAY_ON_COLOR, ICON_KEEP_COLOR, CHIP_OFF_FILL, CHIP_ON_FILL
     global ICON_SPOT_DARK_PATH, ICON_DRAW_DARK_PATH, ICON_SETTINGS_PATH
@@ -4568,7 +4617,7 @@ BuildWidget() {
     keepX := "", keepY := ""
     if IsSet(widget) && widget {
         try WinGetPos(&keepX, &keepY, , , widget)
-        for h in [hBtnSpotOff, hBtnSpotOn, hBtnDrawOff, hBtnDrawOn, hBtnSettings, hBtnZoomOff, hBtnZoomOn]
+        for h in [hBtnSpotOff, hBtnSpotOn, hBtnDrawOff, hBtnDrawOn, hBtnSettings, hBtnZoomOff, hBtnZoomOn, hBtnRecOff, hBtnRecOn]
             try DllCall("DeleteObject", "ptr", h)
         try widget.Destroy()
         ; 없앤 창을 가리키는 채로 두면, 다시 만들기 전에 들어온 클릭이 죽은 창을 건드린다.
@@ -4584,7 +4633,7 @@ BuildWidget() {
     narrow := WidgetPx(14) ; 그립(⋮)·닫기(✕)처럼 글자 폭에 맞춘 좁은 칸
     gap := WidgetPx(4)   ; 칩 사이 간격
     widgetH := chip + top * 2
-    widgetW := pad * 2 + narrow * 2 + chip * 4 + gap * 5 ; 칩 4개: 강조·드로잉·확대·설정
+    widgetW := pad * 2 + narrow * 2 + chip * 5 + gap * 6 ; 칩 5개: 하이라이트·드로잉·라이브 줌·녹화·설정
 
     hBtnSpotOff := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_SPOT_DARK_PATH, icon, ICON_KEEP_COLOR)
     hBtnSpotOn := RenderButtonBitmap(CHIP_ON_FILL, widgetBgColor, chip, corner, ICON_SPOT_DARK_PATH, icon, ICON_KEEP_COLOR)
@@ -4593,6 +4642,8 @@ BuildWidget() {
     hBtnSettings := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_SETTINGS_PATH, icon, ICON_KEEP_COLOR)
     hBtnZoomOff := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_ZOOM_DARK_PATH, icon, ICON_KEEP_COLOR)
     hBtnZoomOn := RenderButtonBitmap(CHIP_ON_FILL, widgetBgColor, chip, corner, ICON_ZOOM_DARK_PATH, icon, ICON_KEEP_COLOR)
+    hBtnRecOff := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_REC_PATH, icon, ICON_KEEP_COLOR)
+    hBtnRecOn := RenderButtonBitmap(CHIP_REC_FILL, widgetBgColor, chip, corner, ICON_REC_PATH, icon, ICON_KEEP_COLOR)
 
     widget := Gui("+AlwaysOnTop -Caption +ToolWindow", "ClassZoom")
     widget.BackColor := HexColor(widgetBgColor)
@@ -4612,6 +4663,10 @@ BuildWidget() {
     btnZoomOff := widget.AddPicture("x" x " y" top " w" chip " h" chip (zoomOn ? " Hidden" : ""), "HBITMAP:" hBtnZoomOff)
     btnZoomOn := widget.AddPicture("x" x " y" top " w" chip " h" chip (zoomOn ? "" : " Hidden"), "HBITMAP:" hBtnZoomOn)
     x += chip + gap
+    ; 녹화 버튼 (record.ahk). 녹화 중(일시정지·저장 중 포함)에는 바탕이 연한 빨강
+    btnRecOff := widget.AddPicture("x" x " y" top " w" chip " h" chip (recState != "" ? " Hidden" : ""), "HBITMAP:" hBtnRecOff)
+    btnRecOn := widget.AddPicture("x" x " y" top " w" chip " h" chip (recState != "" ? "" : " Hidden"), "HBITMAP:" hBtnRecOn)
+    x += chip + gap
     btnSettings := widget.AddPicture("x" x " y" top " w" chip " h" chip, "HBITMAP:" hBtnSettings)
     x += chip + gap
     btnClose := widget.AddText("x" x " y" top " w" narrow " h" chip " Center +0x200", "✕")
@@ -4623,6 +4678,10 @@ BuildWidget() {
     btnSettings.OnEvent("Click", OpenSettingsWindow)
     for ctrl in [btnZoomOff, btnZoomOn]
         ctrl.OnEvent("Click", ToggleZoom)
+    for ctrl in [btnRecOff, btnRecOn]
+        ctrl.OnEvent("Click", RecToggle)
+    ; 녹화 버튼을 오른쪽 클릭하면 "모니터 전체 / 영역 지정"을 고른다
+    widget.OnEvent("ContextMenu", WidgetContextMenu)
     ; 위젯의 ✕는 프로그램 종료가 아니라 위젯만 숨김 (트레이 메뉴의 "위젯 표시"나 설정 창의
     ; "위젯" 탭에서 다시 켤 수 있음)
     ; 주의: 여기서 (*) => (showWidget := false, ...) 처럼 화살표 함수 안에서 전역 변수에 값을
@@ -4873,8 +4932,25 @@ ClampWidgetIntoScreen() {
         try WinMove(nx, ny, , , widget)
 }
 
+WidgetContextMenu(g, ctrl, *) {
+    global btnRecOff, btnRecOn, recState
+    if !(IsObject(ctrl) && (ctrl = btnRecOff || ctrl = btnRecOn))
+        return
+    m := Menu()
+    if (recState = "") {
+        m.Add("모니터 전체 녹화", (*) => RecStart(false))
+        m.Add("영역 지정 녹화", (*) => RecStart(true))
+    } else if (recState = "rec" || recState = "paused") {
+        m.Add(recState = "rec" ? "일시정지" : "계속", RecPauseToggle)
+        m.Add("녹화 끝내기", RecStop)
+    } else
+        return
+    m.Show()
+}
+
 UpdateWidgetState() {
     global spotlightOn, drawOn, btnSpotOff, btnSpotOn, btnDrawOff, btnDrawOn, zoomOn, btnZoomOff, btnZoomOn
+    global recState, btnRecOff, btnRecOn
     global hIconSpotOn, hIconSpotOff, hIconDrawOn, hIconDrawOff, showTrayIcons
     btnSpotOff.Visible := !spotlightOn
     btnSpotOn.Visible := spotlightOn
@@ -4882,6 +4958,8 @@ UpdateWidgetState() {
     btnDrawOn.Visible := drawOn
     btnZoomOff.Visible := !zoomOn
     btnZoomOn.Visible := zoomOn
+    btnRecOff.Visible := (recState = "")
+    btnRecOn.Visible := (recState != "")
 
     if showTrayIcons {
         SetQuickTrayIcon(1, spotlightOn ? hIconSpotOn : hIconSpotOff)
@@ -5087,7 +5165,8 @@ SetWidgetVisible(showWidget) ; 트레이 메뉴 체크 표시까지 시작 상�
 
 ; ================= 단축키 =================
 ; 이름 → 실제로 실행할 동작. 설정 창에서 조합을 바꿔도 동작은 그대로이므로 여기서 한 번만 묶는다.
-HOTKEY_ACTIONS := Map("Spotlight", ToggleSpotlight, "Draw", ToggleDraw, "Zoom", ToggleZoom)
+HOTKEY_ACTIONS := Map("Spotlight", ToggleSpotlight, "Draw", ToggleDraw, "Zoom", ToggleZoom
+    , "Record", RecToggle, "RecordPause", RecPauseToggle, "RecordArea", RecToggleArea)
 
 ; 저장해둔 조합으로 전역 단축키를 켠다. 다른 프로그램이 이미 쓰는 조합이면 등록에 실패하는데,
 ; 시작하자마자 오류 창을 띄우면 수업 중에 곤란하므로 조용히 건너뛴다(위젯과 트레이는 그대로 동작).
@@ -5228,11 +5307,12 @@ IsBrowserActive(*) {
 }
 
 RegisterHotkey(name, combo) {
-    global HOTKEY_ACTIONS, hotkeyRegistered
+    global HOTKEY_ACTIONS, hotkeyRegistered, HOTKEY_NO_PASS
     if hotkeyRegistered.Has(name) {
         old := hotkeyRegistered[name]
         HotIf()
         try Hotkey("~" old, , "Off")
+        try Hotkey(old, , "Off")
         HotIf(IsBrowserActive)
         try Hotkey(old, , "Off")
         hotkeyRegistered.Delete(name)
@@ -5242,9 +5322,13 @@ RegisterHotkey(name, combo) {
         return false
     ok := false
     try {
-        Hotkey("~" combo, HOTKEY_ACTIONS[name], "On") ; 앞 프로그램에도 넘긴다 (반드시 먼저 — 위 설명)
-        HotIf(IsBrowserActive)
-        Hotkey(combo, HOTKEY_ACTIONS[name], "On") ; 브라우저: 삼킨다
+        if HOTKEY_NO_PASS.Has(name) {
+            Hotkey(combo, HOTKEY_ACTIONS[name], "On") ; 녹화 키: 어디서든 삼킨다 (위 HOTKEY_NO_PASS 설명)
+        } else {
+            Hotkey("~" combo, HOTKEY_ACTIONS[name], "On") ; 앞 프로그램에도 넘긴다 (반드시 먼저 — 위 설명)
+            HotIf(IsBrowserActive)
+            Hotkey(combo, HOTKEY_ACTIONS[name], "On") ; 브라우저: 삼킨다
+        }
         hotkeyRegistered[name] := combo
         ok := true
     }
