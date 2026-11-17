@@ -75,7 +75,7 @@ struct UsageGuideView: View {
     private func section(_ title: String, _ items: [(String, String)]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.system(size: 13, weight: .bold)).foregroundColor(ink)
-            ForEach(items, id: \.0) { it in
+            ForEach(Array(items.enumerated()), id: \.offset) { _, it in
                 HStack(spacing: 10) {
                     Text(it.0).font(.system(size: 12, weight: .bold)).foregroundColor(blue).frame(width: 120, alignment: .leading)
                     Text(it.1).font(.callout)
