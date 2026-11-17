@@ -117,8 +117,34 @@ jobs:
       - name: Compile exe
         run: |
           New-Item -ItemType Directory -Force windows\engine | Out-Null
-          Copy-Item dist\classzoom-rec.exe, dist\ffmpeg.exe windows\engine\
-          Copy-Item dist\FFmpeg-LICENSE.txt windows\engine\ # LGPL 고지: 엔진을 꺼낼 때 함께 꺼낸다
+          # 엔진 세 파일을 zip 하나로 최대 압축해 넣는다 (exe 용량을 절반 이하로). 실행할 때 unpack.ahk가 푼다.
+          Remove-Item windows\engine\* -Force -ErrorAction SilentlyContinue
+          & 7z a -tzip -mx=9 windows\engine\engine.zip .\dist\ffmpeg.exe .\dist\classzoom-rec.exe .\dist\FFmpeg-LICENSE.txt | Out-Null
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path windows\engine\engine.zip)) { throw "engine.zip failed" }
+          Get-Item windows\engine\engine.zip | Format-List Name, Length
+          # 압축 풀기 시험: 실제 앱과 같은 unpack.ahk로 tar.exe 경로와 탐색기 경로를 둘 다 푼다
+          $u = Join-Path $env:RUNNER_TEMP 'unpack'
+          @"
+          #Requires AutoHotkey v2.0
+          #Include $PWD\windows\unpack.ahk
+          zip := A_Args[1], dir := A_Args[2]
+          DirCreate(dir "\tar"), DirCreate(dir "\shell")
+          ok1 := UnpackZip(zip, dir "\tar", "ffmpeg.exe", "classzoom-rec.exe", "FFmpeg-LICENSE.txt")
+          sh := ComObject("Shell.Application")
+          sh.Namespace(dir "\shell").CopyHere(sh.Namespace(zip).Items(), 4 | 16 | 1024)
+          t0 := A_TickCount
+          while (!UnpackDone(dir "\shell", ["ffmpeg.exe", "classzoom-rec.exe"]) && A_TickCount - t0 < 120000)
+              Sleep(250)
+          ok2 := UnpackDone(dir "\shell", ["ffmpeg.exe", "classzoom-rec.exe"])
+          FileAppend("tar=" ok1 " shell=" ok2 "``n", "*")
+          ExitApp(ok1 ? (ok2 ? 0 : 2) : 1)
+          "@ | Set-Content "$env:RUNNER_TEMP\unpack-test.ahk" -Encoding utf8
+          $p = Start-Process $env:AHK_EXE -ArgumentList '/ErrorStdOut=UTF-8', "$env:RUNNER_TEMP\unpack-test.ahk", "$PWD\windows\engine\engine.zip", $u `
+            -Wait -PassThru -NoNewWindow -RedirectStandardOutput "$env:RUNNER_TEMP\unpack.log"
+          Get-Content "$env:RUNNER_TEMP\unpack.log" -ErrorAction SilentlyContinue
+          if ($p.ExitCode -eq 2) { Write-Host "::warning::탐색기 방식(Shell.Application) 압축 풀기를 빌드 서버에서 확인하지 못했습니다" }
+          elseif ($p.ExitCode -ne 0) { throw "Engine unpack test failed ($($p.ExitCode))" }
+          if ((Get-FileHash "$u\tar\ffmpeg.exe").Hash -ne (Get-FileHash dist\ffmpeg.exe).Hash) { throw "Unpacked ffmpeg.exe differs" }
           New-Item -ItemType Directory -Force dist | Out-Null
           $out = Join-Path $PWD 'dist/classzoom.exe'
           $p = Start-Process $env:AHK2EXE -ArgumentList '/in', 'classzoom.ahk', '/out', "`"$out`"", '/base', "`"$env:AHK_EXE`"", '/silent', 'verbose' `

@@ -15,6 +15,8 @@
 ;   카운트다운·녹화 표시창·영역 테두리는 SetWindowDisplayAffinity로 녹화(와 화면 캡처)에서 뺀다.
 ;   영역 테두리는 녹화 영역 바깥에 그려서, 혹시 빠지지 않더라도 영상에 들어가지 않는다.
 
+#Include unpack.ahk ; 녹화 엔진 압축 풀기
+
 REC_COUNTDOWN := 3          ; 시작 전 카운트다운 (초)
 REC_POLL_MS := 250          ; 상태 확인·경과 시간 갱신 간격
 REC_BORDER_PX := 3          ; 영역 녹화 테두리 두께
@@ -64,8 +66,8 @@ RecSaveFolder() {
 }
 
 ;---------------- 녹화 엔진 (exe 하나로 배포) ----------------
-; 녹화 도우미(classzoom-rec.exe)와 FFmpeg(ffmpeg.exe)은 classzoom.exe 안에 들어 있다(FileInstall).
-; 처음 녹화할 때 한 번만 %LOCALAPPDATA%\ClassZoom\engine\<버전>\에 꺼내 쓰고, 다음부터는 꺼내 둔 것을 쓴다.
+; 녹화 도우미(classzoom-rec.exe)와 FFmpeg(ffmpeg.exe)은 engine.zip으로 압축되어 classzoom.exe 안에 들어 있다(FileInstall).
+; 처음 녹화할 때 한 번만 %LOCALAPPDATA%\ClassZoom\engine\<버전>\에 꺼내 풀고(unpack.ahk), 다음부터는 풀어 둔 것을 쓴다.
 ; exe 옆에 두 파일이 있으면 그것을 먼저 쓴다 — 소스(.ahk)로 실행할 때, 또는 FFmpeg을 다른 빌드로 바꿔 쓰고 싶을 때.
 RecEnginePaths(&ffmpeg, &helper) {
     global APP_VERSION
@@ -84,10 +86,13 @@ RecEnginePaths(&ffmpeg, &helper) {
     TrayTip("처음 한 번만 녹화 엔진을 준비합니다…", "ClassZoom", "Iconi")
     try {
         DirCreate(dir)
-        ; 아래 두 줄은 컴파일할 때 windows\engine\의 파일을 exe 안에 넣고, 실행할 때 꺼낸다
-        FileInstall("engine\ffmpeg.exe", ffmpeg, 1)
-        FileInstall("engine\classzoom-rec.exe", helper, 1)
-        FileInstall("engine\FFmpeg-LICENSE.txt", dir "\FFmpeg-LICENSE.txt", 1) ; FFmpeg LGPL 2.1 고지
+        ; 컴파일할 때 windows\engine\engine.zip을 exe 안에 넣고, 실행할 때 꺼내 푼다
+        ; (zip 안: ffmpeg.exe · classzoom-rec.exe · FFmpeg-LICENSE.txt[LGPL 2.1 고지])
+        zip := dir "\engine.zip"
+        FileInstall("engine\engine.zip", zip, 1)
+        if !UnpackZip(zip, dir, "ffmpeg.exe", "classzoom-rec.exe")
+            throw Error("압축을 풀지 못했습니다")
+        try FileDelete(zip)
         FileAppend(APP_VERSION, dir "\ready") ; 다 꺼낸 뒤에만 표시 (중간에 끊기면 다음에 다시 꺼낸다)
     } catch as err {
         MsgBox("녹화 엔진을 준비하지 못했습니다.`n`n" dir "`n(" err.Message ")", "ClassZoom — 녹화", "Icon!")
