@@ -54,6 +54,9 @@ enum HotkeyRules {
         if ["3", "4", "5"].contains(key) && only == cmdKey | shiftKey {
             return .rejected("\(shown)는 macOS 화면 캡처 조합입니다.")
         }
+        if key == "q" && only == controlKey | cmdKey { return .rejected("⌃⌘Q는 macOS가 화면을 잠그는 데 쓰는 조합입니다.") }
+        if key == "f" && only == controlKey | cmdKey { return .rejected("⌃⌘F는 macOS가 전체 화면을 켜고 끄는 데 쓰는 조합입니다.") }
+        if key == "space" && only == controlKey | cmdKey { return .rejected("⌃⌘Space는 macOS가 이모지 창을 여는 데 쓰는 조합입니다.") }
 
         if key.hasPrefix("f"), let n = Int(key.dropFirst()) {
             if n > 19 { return .rejected("F키는 F1~F19만 쓸 수 있습니다.") }
@@ -70,5 +73,35 @@ enum HotkeyRules {
         }
         if ctrl || opt { return .ok }
         return .rejected("\(shown): ⌃ 또는 ⌥를 함께 눌러야 합니다.")
+    }
+
+    // 받아들일 수는 있지만 다른 앱이나 macOS 기능과 겹치는 조합이면 안내 글을 돌려준다 (설정 창이 주황색으로 보인다).
+    // ClassZoom이 키를 먼저 잡으므로, 겹치는 앱에서는 그 키의 원래 기능이 동작하지 않는다.
+    static func caution(_ c: HotkeyNotation.Combo) -> String? {
+        guard let key = HotkeyNotation.keyName(c.code) else { return nil }
+        let shown = show(c), only = c.mods
+        var use: String?
+        if only == 0 {
+            switch key {
+            case "f1", "f2": use = "화면 밝기 조절(fn 없이 누를 때)"
+            case "f3": use = "Mission Control"
+            case "f5": use = "Keynote·PowerPoint 슬라이드 쇼"
+            case "f11": use = "데스크톱 보기"
+            case "f12": use = "브라우저 개발자 도구"
+            default: break
+            }
+        } else if only == controlKey, key.count == 1 {
+            switch key {
+            case "a", "e": use = "글 입력 중 줄 처음·끝으로 이동"
+            case "k": use = "글 입력 중 줄 끝까지 지우기"
+            case "c": use = "터미널에서 실행 중단"
+            case "d": use = "글 입력 중 한 글자 지우기·터미널 끝내기"
+            default: break
+            }
+        } else if only == controlKey | cmdKey, key == "d" {
+            use = "사전에서 단어 찾기"
+        }
+        guard let u = use else { return nil }
+        return "\(shown)는 \(u)에도 쓰는 키입니다. ClassZoom 단축키로 정했기 때문에 그 기능은 동작하지 않을 수 있습니다. 불편하면 다른 키를 눌러 주세요."
     }
 }

@@ -424,6 +424,7 @@ struct SettingsView: View {
     var startTab = 0 // 자체 점검이 탭마다 그림을 뽑으려고
     @State private var tab = -1
     @State private var hotkeyMessage: [String: String] = [:]
+    @State private var hotkeyCaution: [String: String] = [:] // 쓸 수는 있지만 다른 앱과 겹친다는 안내
     @State private var saved = false
     @State private var login = LoginItem.state()
     @ObservedObject private var update = UpdateCheck.shared
@@ -603,14 +604,20 @@ struct SettingsView: View {
     private var keys: some View {
         Page {
             Card(title: "켜고 끄기 (칸을 누른 뒤 바꿀 키를 누르세요)") {
-                ForEach(SettingsSchema.hotkeys, id: \.name) { h in hotkeyRow(h.name, def: h.def) }
-                Text("맥북 키보드에서는 F8·F9를 fn 키와 함께 누르세요. fn 없이 누르면 음악 재생·건너뛰기가 먼저 동작합니다.")
+                ForEach(hotkeysInKeyOrder, id: \.name) { h in hotkeyRow(h.name, def: h.def) }
+                Text("맥북 키보드에서는 F7~F10을 fn 키와 함께 누르세요. fn 없이 누르면 음악 재생·건너뛰기 같은 기능이 먼저 동작합니다.")
                     .font(.callout).foregroundStyle(.secondary)
-                Text("글자·숫자는 ⌃(Control)를 함께 눌러야 합니다. 드로잉 중에 쓰는 키와 macOS가 쓰는 조합은 바꿀 수 없습니다.")
-                    .font(.callout).foregroundStyle(.secondary)
+                Text("글자·숫자는 ⌃(Control)를 함께 눌러야 합니다. 다른 기능과 같은 키, 드로잉 중에 쓰는 키, macOS가 쓰는 조합은 쓸 수 없습니다. 다른 앱에서도 쓰는 키로 바꾸면 겹친다고 주황색 글로 알려 드립니다.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             HStack { Button("드로잉 모드 단축키 보기", action: onShowKeyboard); Spacer(minLength: 0) }
         }
+    }
+
+    // 기본 키 순서(F7 라이브 줌 → F8 하이라이트 → F9 드로잉 → F10 녹화)로 보여 준다. 저장 순서(SettingsSchema)는 그대로 둔다.
+    private static let keyOrder = ["Zoom", "ZoomAlt", "Spotlight", "SpotlightAlt", "Draw", "DrawAlt", "Record", "RecordAlt", "RecordPause", "RecordArea"]
+    private var hotkeysInKeyOrder: [(name: String, def: String, macOnly: Bool)] {
+        SettingsSchema.hotkeys.sorted { (Self.keyOrder.firstIndex(of: $0.name) ?? 99) < (Self.keyOrder.firstIndex(of: $1.name) ?? 99) }
     }
 
     private func hotkeyRow(_ name: String, def: String) -> some View {
@@ -619,14 +626,18 @@ struct SettingsView: View {
             HStack(spacing: 8) {
                 Text(HotkeyRules.label(name)).frame(width: 168, alignment: .leading)
                 HotkeyField(display: HotkeyDisplay.symbols(current)) { combo in
-                    hotkeyMessage[name] = onHotkey(name, combo)
+                    let why = onHotkey(name, combo)
+                    hotkeyMessage[name] = why
+                    hotkeyCaution[name] = why == nil ? HotkeyRules.caution(combo) : nil // 받아들였지만 다른 앱과 겹치는 키
                 }
                 .frame(width: 160, height: 28)
-                Button("기본값") { hotkeyMessage[name] = onHotkey(name, nil) }.disabled(current == def)
+                Button("기본값") { hotkeyMessage[name] = onHotkey(name, nil); hotkeyCaution[name] = nil }.disabled(current == def)
                 Spacer(minLength: 0)
             }
             if let m = hotkeyMessage[name] {
                 Text(m).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            } else if let m = hotkeyCaution[name] {
+                Text(m).font(.callout).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
