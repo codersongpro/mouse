@@ -8,6 +8,7 @@ import AppKit
     nonisolated static let fileURL = URL(string: "https://raw.githubusercontent.com/codersongpro/mouse/main/version.txt")!
     nonisolated static let releasesURL = URL(string: "https://github.com/codersongpro/mouse/releases/latest")!
     nonisolated static let authorURL = URL(string: "https://songpro.app")!
+    nonisolated static let downloadPageURL = URL(string: "https://songpro.app/#download")! // "받으러 가기"는 랜딩페이지로
 
     enum Status: Equatable {
         case idle                 // 아직 읽지 않음 (자체 점검 그림도 이 모양)
@@ -20,11 +21,8 @@ import AppKit
     @Published private(set) var status: Status = .idle
     private var task: URLSessionDataTask?
 
-    // 받는 곳: 새 버전이면 version.txt가 가리키는 릴리스, 아니면 GitHub 최신 릴리스
-    var downloadURL: URL {
-        if case .newer(_, let u) = status { return u }
-        return Self.releasesURL
-    }
+    // "받으러 가기": 새 버전이든 아니든 랜딩페이지의 다운로드 칸을 연다 (GitHub 릴리스 화면보다 안내가 쉽다)
+    var downloadURL: URL { Self.downloadPageURL }
 
     func refresh() {
         guard status != .checking else { return }

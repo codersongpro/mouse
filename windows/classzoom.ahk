@@ -9,7 +9,7 @@
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
 ;@Ahk2Exe-SetDescription ClassZoom
-;@Ahk2Exe-SetVersion 1.3.2
+;@Ahk2Exe-SetVersion 1.3.3
 ;@Ahk2Exe-SetCopyright © 2026 송동석 (Songpro / Dustin). MIT License
 ;@Ahk2Exe-SetCompanyName Songpro
 
@@ -57,7 +57,7 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.3.2"
+APP_VERSION := "1.3.3"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
@@ -65,6 +65,7 @@ APP_VERSION := "1.3.2"
 UPDATE_FILE_URL := "https://raw.githubusercontent.com/codersongpro/mouse/main/version.txt"
 RELEASES_URL := "https://github.com/codersongpro/mouse/releases/latest"
 AUTHOR_URL := "https://songpro.app" ; 설정 창의 홈페이지 링크
+DOWNLOAD_PAGE_URL := "https://songpro.app/#download" ; "받으러 가기"는 랜딩페이지의 다운로드 칸으로 연다
 
 ; ---- 만든 사람 · 저작권 (설정 창 일반 탭, 사용 방법 창, 이용 안내에 쓴다) ----
 MAKER_NAME := "송동석 (Songpro / Dustin)"
@@ -4412,7 +4413,7 @@ OpenSettingsWindow(*) {
     lblUpdate := settingsGui.AddText("x22 y228 w516 Center +0x80", "현재 " APP_VERSION " · 최신 버전 확인 중…")
     lblUpdate.SetFont("s9 c666666")
     btnDownload := settingsGui.AddButton("x220 y250 w120 h28", "받으러 가기")
-    btnDownload.OnEvent("Click", (*) => Run(updateUrl))
+    btnDownload.OnEvent("Click", (*) => Run(DOWNLOAD_PAGE_URL))
 
     ; 만든 사람 · 저작권 (MAKER_* 는 guide.ahk와 같이 쓴다)
     settingsGui.AddText("x40 y296 w480 h2 0x10")
