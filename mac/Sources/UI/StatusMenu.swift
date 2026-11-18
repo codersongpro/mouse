@@ -142,7 +142,7 @@ extension AppDelegate {
         button.target = self
         button.action = #selector(trayClicked(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        button.toolTip = "강조 · 드로잉 · 설정 메뉴"
+        button.toolTip = "ClassZoom"
         let spotOn = state.spotOn, drawOn = draw.isOn
         // 모든 크기를 메뉴 막대 높이에 비례시킨다. 기준은 노치 맥북(메뉴 막대 37)에서 정한 값: 테두리 28, 아이콘 21, 사이 여백 2, 양끝 여백 3.5.
         // (NSStatusBar.thickness는 22로 옛 값이라 쓰지 않고 칸 창의 실제 높이를 읽는다. 폭이 너무 넓으면 시스템이 통째로 숨기므로 높이에 비례해 줄어들게 했다)

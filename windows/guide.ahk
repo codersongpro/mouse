@@ -51,16 +51,16 @@ ShowUsageGuide(*) {
 
     ; ---- 위젯 버튼 네 개 ----
     rows := [
-        [ICON_SPOT_DARK_PATH, "마우스 하이라이트", HotkeyText(hotkeyCombos["Spotlight"])
-            , "커서 주위를 노란 원으로 강조합니다. 클릭하면 원이 오므라듭니다."],
-        [ICON_DRAW_DARK_PATH, "드로잉", HotkeyText(hotkeyCombos["Draw"])
-            , "드래그해서 그립니다. Caps Lock을 누르고 있는 동안에도 그려집니다. Esc는 지우고 끄기."],
         [ICON_ZOOM_DARK_PATH, "라이브 줌", HotkeyText(hotkeyCombos["Zoom"])
             , "누를 때마다 1단계 → 2단계 → 3단계 → 끄기. 영상도 그대로 움직입니다."],
+        [ICON_SPOT_DARK_PATH, "마우스 하이라이트", HotkeyText(hotkeyCombos["Spotlight"])
+            , "커서 주위를 원하는 색의 원으로 강조합니다(색은 설정에서 고름). 클릭하면 원이 오므라듭니다."],
+        [ICON_DRAW_DARK_PATH, "드로잉", HotkeyText(hotkeyCombos["Draw"])
+            , "드래그해서 그립니다. Caps Lock을 누르고 있는 동안에도 그려집니다. Esc는 지우고 끄기."],
         [ICON_REC_PATH, "화면 녹화", HotkeyText(hotkeyCombos["Record"])
             , "3·2·1 뒤 녹화를 시작하고 다시 누르면 MP4로 저장합니다. 마이크·컴퓨터 소리도 함께."],
         [ICON_SETTINGS_PATH, "설정", "위젯 버튼"
-            , "색·굵기·확대 배율·단축키를 바꿉니다."]]
+            , "색·굵기·확대 배율을 바꿉니다. 단축키도 원하는 키로 바꿀 수 있습니다(단축키 탭)."]]
     y := 84
     for r in rows {
         ; 위젯과 같은 모양의 버튼 그림(연한 하늘색 칩 + 컬러 아이콘)으로 보여준다
@@ -87,7 +87,7 @@ ShowUsageGuide(*) {
         [HotkeyText(hotkeyCombos["RecordArea"]), "영역을 골라 그 부분만 녹화"],
         ["저장 위치", "동영상\ClassZoom 폴더 (설정 → 녹화에서 바꿈)"]])
     GuideSection(g, &y, "드로잉 중", [
-        ["Caps Lock 누른 채 드래그", "F9 없이 바로 그리기 (떼면 그림은 남음)"],
+        ["Caps Lock 누른 채 드래그", "드로잉 키 없이 바로 그리기 (떼면 그림은 남음)"],
         ["Ctrl / Shift + 드래그", "네모 / 원"],
         ["Z / X / C + 드래그", "직선 / 물결 / 화살표 (화살표 끝을 끌어 고침)"],
         ["V + 드래그", "움직이는 강조 화살표"],

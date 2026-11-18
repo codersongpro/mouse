@@ -39,7 +39,7 @@ import AppKit
                 ("^!h", nil), ("^h", nil), ("^+h", nil), ("#!h", nil), ("#^h", nil), ("^!5", nil), ("F7", nil), ("+F7", nil), ("!F7", nil), ("^F7", nil), ("F19", nil),
                 ("h", "보조 키"), ("+h", "보조 키"), ("!h", "⌥"), ("!+h", "⌥"), ("#h", "⌘"), ("#+h", "⌘"), ("5", "드로잉 중에 쓰는 키"),
                 ("#F7", "⌘"), ("F20", "F1~F19"),
-                ("#Space", "macOS"), ("^Space", "macOS"), ("#Tab", "macOS"), ("^Left", "macOS"), ("^Up", "macOS"), ("#+3", "화면 캡처"), ("#+4", "화면 캡처"),
+                ("#Space", "macOS"), ("^Space", "macOS"), ("#Tab", "macOS"), ("^Left", "macOS"), ("^Up", "macOS"), ("#+3", "화면 캡처"), ("#+4", "화면 캡처"), ("#^q", "macOS"), ("#^f", "macOS"),
                 ("Space", "⌃ 또는 ⌥"), ("Tab", "⌃ 또는 ⌥"), ("Esc", "드로잉 중에 쓰는 키"),
                 ("F9", "이미 '"), ("^!2", "이미 '"),     // 다른 기능이 쓰는 조합
                 ("#z", "드로잉 중에 쓰는 키"), ("^z", "드로잉 중에 쓰는 키"), ("1", "드로잉 중에 쓰는 키"),
@@ -54,6 +54,9 @@ import AppKit
                 }
             }
             check("단축키 규칙: 조합 \(cases.count)개의 허용·거절과 이유 (한국어)", wrong.isEmpty, wrong.joined(separator: "; "))
+            check("단축키 겹침 안내: F5·⌃A는 주의 글, F7·⌃⌥1은 없음",
+                  HotkeyRules.caution(combo("F5")) != nil && HotkeyRules.caution(combo("^a")) != nil
+                  && HotkeyRules.caution(combo("F7")) == nil && HotkeyRules.caution(combo("^!1")) == nil)
             let defs = SettingsSchema.hotkeys.allSatisfy { h in
                 HotkeyRules.check(combo(h.def), name: h.name, others: [:]) == .ok
             }

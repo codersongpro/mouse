@@ -8,8 +8,8 @@
 ; 컴파일된 exe는 이 아이콘을 파일 아이콘이자 트레이 아이콘으로 함께 사용한다.
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
-;@Ahk2Exe-SetDescription ClassZoom - 라이브 줌 / 마우스 하이라이트 / 드로잉 / 화면 녹화
-;@Ahk2Exe-SetVersion 1.3.1
+;@Ahk2Exe-SetDescription ClassZoom
+;@Ahk2Exe-SetVersion 1.3.2
 ;@Ahk2Exe-SetCopyright © 2026 송동석 (Songpro / Dustin). MIT License
 ;@Ahk2Exe-SetCompanyName Songpro
 
@@ -57,7 +57,7 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.3.1"
+APP_VERSION := "1.3.2"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
@@ -84,7 +84,7 @@ ShowTermsNotice(owner := 0, *) {
 }
 updateReq := "", updateDeadline := 0, updateUrl := RELEASES_URL, lblUpdate := ""
 
-A_IconTip := "ClassZoom v" APP_VERSION " - 화면 확대 / 마우스 강조 / 화면 드로잉"
+A_IconTip := "ClassZoom" ; 작업표시줄 아이콘에 마우스를 올리면 이름만 보인다 (버전은 설정 › 일반에 있다)
 
 ; 컴파일된 exe는 위 SetMainIcon으로 넣은 아이콘을 트레이 아이콘으로도 그대로 쓰지만,
 ; .ahk 소스로 직접 실행할 때는 AutoHotkey 기본 아이콘(초록색 H)이 뜬다. 소스로 실행할 때도
@@ -4434,13 +4434,14 @@ OpenSettingsWindow(*) {
     lblTerms.OnEvent("Click", (*) => ShowTermsNotice(settingsGui.Hwnd))
 
     tabs.UseTab("단축키")
-    AddHotkeyRow(settingsGui, 50, "Spotlight")
-    AddHotkeyRow(settingsGui, 90, "Draw")
-    AddHotkeyRow(settingsGui, 130, "Zoom")
+    ; 기본 키 순서(F7 → F8 → F9 → F10)대로 늘어놓는다 — 위젯·안내문·랜딩페이지와 같은 순서
+    AddHotkeyRow(settingsGui, 50, "Zoom")
+    AddHotkeyRow(settingsGui, 90, "Spotlight")
+    AddHotkeyRow(settingsGui, 130, "Draw")
     AddHotkeyRow(settingsGui, 170, "Record")
     AddHotkeyRow(settingsGui, 210, "RecordPause")
     AddHotkeyRow(settingsGui, 250, "RecordArea")
-    lblHotkeyHelp := settingsGui.AddText("x30 y288 w420 h32", "단축키를 직접 눌러 지정할 수 있습니다.  Ctrl이나 Alt키가 포함되어야 합니다.")
+    lblHotkeyHelp := settingsGui.AddText("x30 y284 w490 h44", "칸을 누른 뒤 원하는 키를 누르면 바뀝니다. 글자 키는 Ctrl이나 Alt와 함께 눌러야 합니다.`n다른 기능과 같은 키, Windows가 쓰는 키(Alt+Tab 등)는 쓸 수 없고, 다른 프로그램에서도 쓰는 키(F5, Ctrl+C 등)는 겹친다고 알려 드립니다.")
     lblHotkeyHelp.SetFont("s9 c999999")
 
     ; 드로잉 중에만 쓰는 키(도형·색·굵기·지우기)는 여기 글로 늘어놓지 않는다. **키보드 그림
@@ -5642,6 +5643,55 @@ IsSafeHotkey(combo) {
     return RegExMatch(combo, "i)^\+?F([1-9]|1[0-9]|2[0-4])$") > 0
 }
 
+; 단축키 표기를 비교하기 쉽게 고친다: 보조 키는 ^ ! + # 순서로, 키 이름은 소문자로 ("+^C" → "^+c")
+NormalizeHotkey(combo) {
+    mods := "", i := 1
+    while (i <= StrLen(combo) && InStr("^!+#", SubStr(combo, i, 1)))
+        i++
+    head := SubStr(combo, 1, i - 1)
+    for m in ["^", "!", "+", "#"]
+        if InStr(head, m)
+            mods .= m
+    return mods StrLower(SubStr(combo, i))
+}
+
+; Windows나 ClassZoom 드로잉 모드가 이미 쓰는 조합이면 그 쓰임을 돌려준다 (이런 키는 받지 않는다)
+HotkeySystemUse(combo) {
+    static uses := Map(
+        "!tab", "Windows가 창을 바꾸는 데 쓰는 키입니다.",
+        "!f4", "Windows가 창을 닫는 데 쓰는 키입니다.",
+        "!esc", "Windows가 창을 바꾸는 데 쓰는 키입니다.",
+        "^esc", "Windows가 시작 메뉴를 여는 데 쓰는 키입니다.",
+        "^+esc", "Windows가 작업 관리자를 여는 데 쓰는 키입니다.",
+        "^!delete", "Windows 보안 화면을 여는 키입니다.",
+        "!space", "Windows가 창 메뉴를 여는 데 쓰는 키입니다.",
+        "^z", "드로잉 중에 되돌리기로 쓰는 키입니다.")
+    k := NormalizeHotkey(combo)
+    return uses.Has(k) ? uses[k] : ""
+}
+
+; 다른 프로그램도 흔히 쓰는 조합이면 그 쓰임을 돌려준다 (쓸 수는 있지만 겹친다고 알린다)
+HotkeyAppUse(combo) {
+    static uses := Map(
+        "f1", "대부분 프로그램의 도움말",
+        "f2", "파일 이름 바꾸기·엑셀 셀 고치기",
+        "f3", "찾기",
+        "f4", "주소창 열기",
+        "f5", "PowerPoint 슬라이드 쇼·브라우저 새로 고침",
+        "+f5", "PowerPoint 현재 슬라이드부터 쇼",
+        "f6", "주소창·창 영역 이동",
+        "f11", "브라우저 전체 화면",
+        "f12", "개발자 도구·다른 이름으로 저장",
+        "^c", "복사", "^v", "붙여넣기", "^x", "잘라내기", "^y", "다시 실행",
+        "^a", "모두 선택", "^s", "저장", "^p", "인쇄", "^f", "찾기",
+        "^n", "새 문서·새 창", "^o", "열기", "^w", "탭·창 닫기", "^t", "새 탭",
+        "^r", "새로 고침", "^b", "굵게", "^i", "기울임", "^u", "밑줄",
+        "^+t", "닫은 탭 다시 열기", "^+n", "새 시크릿 창",
+        "!f", "프로그램의 파일 메뉴", "!d", "주소창")
+    k := NormalizeHotkey(combo)
+    return uses.Has(k) ? uses[k] : ""
+}
+
 ; combo를 name 동작의 전역 단축키로 등록한다. 성공하면 true.
 ; 이미 등록돼 있던 조합은 먼저 해제해서, 옛 조합이 계속 살아있는 일이 없게 한다.
 ;
@@ -5698,7 +5748,7 @@ RegisterHotkey(name, combo) {
 ; 설정 창의 단축키 칸에서 값이 바뀌었을 때 불린다. 문제가 있으면 원래 조합으로 되돌리고
 ; 이유를 알려준다 — 조용히 무시하면 왜 안 바뀌는지 알 수 없다.
 ChangeHotkey(name, combo, ctrl) {
-    global hotkeyCombos, hotkeyApplying, HOTKEY_LABELS
+    global hotkeyCombos, hotkeyApplying, HOTKEY_LABELS, HOTKEY_NO_PASS
     if hotkeyApplying
         return
     ; 조합키만 누르고 있는 동안에는 아직 키가 안 정해져 빈 값이 온다 — 입력 중이므로 그냥 둔다
@@ -5707,13 +5757,32 @@ ChangeHotkey(name, combo, ctrl) {
 
     old := hotkeyCombos[name]
     reason := ""
-    if !IsSafeHotkey(combo)
+    sysUse := HotkeySystemUse(combo)
+    if (sysUse != "")
+        reason := HotkeyText(combo) "는 " sysUse "`n이 키는 ClassZoom 단축키로 쓸 수 없습니다. 다른 조합으로 정해주세요."
+    else if !IsSafeHotkey(combo)
         reason := "Ctrl이나 Alt를 함께 누르는 조합으로 정해주세요.`n`n글자 키 하나만 지정하면 글을 쓰는 동안 그 글자를 칠 때마다 기능이 켜지고 꺼집니다. (F1~F12 같은 기능키는 단독으로도 됩니다)"
     else {
         for otherName, otherCombo in hotkeyCombos {
             if (otherName != name && otherCombo = combo) {
                 reason := "이미 " HOTKEY_LABELS[otherName] " 기능에 쓰고 있는 조합입니다.`n다른 조합으로 정해주세요."
                 break
+            }
+        }
+    }
+    ; 다른 프로그램도 흔히 쓰는 키면 겹친다고 알리고, 그래도 쓸지 묻는다
+    if (reason = "") {
+        appUse := HotkeyAppUse(combo)
+        if (appUse != "") {
+            effect := "이 키로 정하면 앞에 띄운 프로그램의 기능도 함께 실행됩니다. (브라우저에서는 ClassZoom 기능만 동작합니다)"
+            if HOTKEY_NO_PASS.Has(name) ; 녹화 키는 앞 프로그램에 넘기지 않는다
+                effect := "이 키로 정하면 그 프로그램에서는 이 키가 더 이상 동작하지 않습니다."
+            if (MsgBox(HotkeyText(combo) "는 " appUse "에도 쓰는 키입니다.`n" effect "`n`n그래도 " HOTKEY_LABELS[name] " 단축키로 정할까요?"
+                , "ClassZoom - 단축키 겹침", "YesNo Icon?") != "Yes") {
+                hotkeyApplying := true
+                ctrl.Value := old
+                hotkeyApplying := false
+                return
             }
         }
     }
