@@ -1,13 +1,13 @@
 import AppKit
 
 // 화면 구석의 작은 조작판: ⋮(옮기기) · 하이라이트 · 드로잉 · 라이브 줌 · 녹화 · 설정 · ✕(숨기기)
-// 아이콘은 컬러 그림을 그대로 쓰고, 켜진 칸은 바탕을 노랑(녹화 중은 연한 빨강)으로 칠한다 (Windows 판과 같음).
+// 아이콘은 컬러 그림을 그대로 쓰고, 켜진 칸은 바탕을 하늘색(녹화 중은 연한 빨강)으로 칠한다 (Windows 판과 같음).
 // Windows 판과 같은 크기 비율(칩 32, 모서리 12, 아이콘 22)을 쓴다.
 
 let ON_COLOR: UInt32 = 0x0A84FF
-// 위젯 기본색: 진한 파랑 (흰 문서·어두운 영상 어디서나 눈에 띈다, 1.3.4부터). 예전 기본은 연회색
-let WIDGET_DEFAULT_COLOR: UInt32 = 0x2563EB
-let WIDGET_OLD_DEFAULT_COLOR: UInt32 = 0xF2F2F2
+// 위젯 기본색: 연노랑 (눈에 띄고 아이콘도 또렷하다, 1.3.5부터). 예전 기본은 연회색(1.3.3까지)·진한 파랑(1.3.4)
+let WIDGET_DEFAULT_COLOR: UInt32 = 0xFEF08A
+let WIDGET_OLD_DEFAULT_COLORS: Set<UInt32> = [0xF2F2F2, 0x2563EB]
 
 func tintedIcon(_ name: String, _ tint: NSColor) -> NSImage? {
     guard let url = Bundle.main.url(forResource: name, withExtension: "png"),
@@ -28,6 +28,15 @@ func tintedIcon(_ name: String, _ tint: NSColor) -> NSImage? {
 final class WidgetPartElement: NSAccessibilityElement {
     var press: () -> Void = {}
     override func accessibilityPerformPress() -> Bool { press(); return true }
+}
+
+// 칸마다 설명 글을 돌려주는 도우미 (NSView의 툴팁 주인)
+final class WidgetTipOwner: NSObject, NSViewToolTipOwner {
+    weak var view: WidgetView?
+    init(view: WidgetView) { self.view = view }
+    func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint, userData data: UnsafeMutableRawPointer?) -> String {
+        self.view?.tip(at: point) ?? ""
+    }
 }
 
 final class WidgetView: NSView {
@@ -111,11 +120,11 @@ final class WidgetView: NSView {
 
         let corner = WidgetView.px(12) / 2
         let iconSize = WidgetView.px(24)
-        let onFill = NSColor(calibratedRed: 0xFD / 255, green: 0xE0 / 255, blue: 0x47 / 255, alpha: 1) // 켜짐: 노랑 (Windows와 같음)
+        let onFill = NSColor(calibratedRed: 0x93 / 255, green: 0xC5 / 255, blue: 0xFD / 255, alpha: 1) // 켜짐: 하늘색 (Windows와 같음)
         let recFill = NSColor(calibratedRed: 0xFE / 255, green: 0xCA / 255, blue: 0xCA / 255, alpha: 1)
         for (part, key, on) in [(Part.spot, "spot", spotOn), (.draw, "draw", drawOn), (.zoom, "zoom", zoomOn), (.record, "record", recOn), (.settings, "settings", false)] {
             let r = rect(part)
-            // 칸: 흰 바탕(켜지면 노랑, 녹화 중은 연한 빨강) + 얇은 테두리. 누르는 동안은 옅게 어둡게.
+            // 칸: 흰 바탕(켜지면 하늘색, 녹화 중은 연한 빨강) + 얇은 테두리. 누르는 동안은 옅게 어둡게.
             let edge = color(s.widgetColor).blended(withFraction: 0.5, of: isDark ? .white : .black) ?? .gray
             let chip = NSBezierPath(roundedRect: r.insetBy(dx: 0.5, dy: 0.5), xRadius: corner, yRadius: corner)
             (on ? (part == .record ? recFill : onFill) : NSColor.white).setFill()
@@ -166,8 +175,28 @@ final class WidgetView: NSView {
         }
     }
 
+    // 마우스를 올리면 뜨는 설명 (지금 단축키를 함께 보여 준다)
+    static func tipText(_ part: Part) -> String {
+        func key(_ name: String) -> String {
+            " (" + HotkeyDisplay.symbols(Settings.shared.hotkeys[name] ?? SettingsSchema.hotkeyDefaults[name] ?? "") + ")"
+        }
+        switch part {
+        case .grip: return "끌어서 옮기기"
+        case .spot: return "마우스 하이라이트" + key("Spotlight")
+        case .draw: return "드로잉" + key("Draw")
+        case .zoom: return "라이브 줌" + key("Zoom") + " · 누를 때마다 1 → 2 → 3단계 → 끄기"
+        case .record: return "화면 녹화" + key("Record") + " · 오른쪽 클릭: 메뉴"
+        case .settings: return "설정"
+        case .close: return "위젯 숨기기 (메뉴 막대 아이콘에서 다시 켬)"
+        }
+    }
+    func tip(at point: NSPoint) -> String { part(at: point).map(WidgetView.tipText) ?? "" }
+    private lazy var tipOwner = WidgetTipOwner(view: self) // addToolTip은 주인을 붙들지 않으므로 여기서 붙든다
+
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
+        removeAllToolTips()
+        for p in [Part.grip, .spot, .draw, .zoom, .record, .settings, .close] { addToolTip(rect(p), owner: tipOwner, userData: nil) }
         trackingAreas.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(rect: bounds, options: [.activeAlways, .mouseMoved, .mouseEnteredAndExited, .inVisibleRect],
                                        owner: self, userInfo: nil))

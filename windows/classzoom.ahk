@@ -9,7 +9,7 @@
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
 ;@Ahk2Exe-SetDescription ClassZoom
-;@Ahk2Exe-SetVersion 1.3.4
+;@Ahk2Exe-SetVersion 1.3.5
 ;@Ahk2Exe-SetCopyright © 2026 송동석 (Songpro / Dustin). MIT License
 ;@Ahk2Exe-SetCompanyName Songpro
 
@@ -57,7 +57,7 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.3.4"
+APP_VERSION := "1.3.5"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
@@ -240,7 +240,7 @@ LoadSettings() {
     global SETTINGS_PATH, SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep
     global STEP_MAX, PEN_BASE_PX, PEN_STEP_RATIO, ERASER_BASE_PX, ERASER_STEP_RATIO
     global spotColor, clickColor, drawColor, laserHold, laserFade, laserGlow
-    global clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY, widgetOnTop
+    global clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY, widgetOnTop, boardMode, boardModeAsked
     global HOTKEY_DEFAULTS, hotkeyCombos, DEFAULT_DRAW_STEP, DEFAULT_ERASER_STEP
     SpotSize := ReadIniNum("Highlight", "Size", 30, 200, 130)
     ; 예전 버전은 투명도를 0~255로 저장했었다. 그 값이 남아있어도 안전하게 0~100으로 잘려 들어가도록 한다.
@@ -287,12 +287,16 @@ LoadSettings() {
     showTrayIcons := IniRead(SETTINGS_PATH, "Common", "ShowTrayIcons", 0) = 1
     ; 위젯 크기는 100%가 기준. 빔프로젝터로 크게 띄우거나 고해상도 노트북에서 작게 보일 때 쓴다.
     widgetScale := ReadIniNum("Common", "WidgetScale", 60, 250, 100)
-    ; 기본은 진한 파랑: 흰 문서·어두운 영상 어디에 두어도 눈에 잘 띈다 (1.3.4부터, 예전 기본은 연회색 F2F2F2)
-    widgetBgColor := ReadIniColor("Common", "WidgetColor", 0x2563EB)
-    if (widgetBgColor = 0xF2F2F2) ; 예전 기본색을 그대로 쓰던 PC도 새 기본색으로 (일부러 고른 색은 그대로)
-        widgetBgColor := 0x2563EB
+    ; 기본은 연노랑: 흰 문서·어두운 영상 어디에 두어도 눈에 띄고 아이콘도 또렷하다 (1.3.5부터.
+    ; 1.3.3까지는 연회색 F2F2F2, 1.3.4는 진한 파랑 2563EB — 파랑은 아이콘이 묻혀 바꿨다)
+    widgetBgColor := ReadIniColor("Common", "WidgetColor", 0xFEF08A)
+    if (widgetBgColor = 0xF2F2F2 || widgetBgColor = 0x2563EB) ; 예전 기본색을 그대로 쓰던 PC도 새 기본색으로 (일부러 고른 색은 그대로)
+        widgetBgColor := 0xFEF08A
     ; 위젯을 늘 다른 창들 위에 둘지. 끄면 다른 창 뒤로 갈 수 있다 (드로잉·라이브 줌·녹화 중에는 위젯을 눌러 끌 수 있게 여전히 위에 둔다)
     widgetOnTop := IniRead(SETTINGS_PATH, "Common", "WidgetOnTop", 1) = 1
+    ; 전자칠판 모드: 큰 세로 위젯 + 확대 +/− + 드로잉 팔레트. 터치 화면이 있는 PC에서 처음 한 번 물어본다(BoardModeAsked)
+    boardMode := IniRead(SETTINGS_PATH, "Common", "BoardMode", 0) = 1
+    boardModeAsked := IniRead(SETTINGS_PATH, "Common", "BoardModeAsked", 0) = 1
     ; 위젯이 수업 화면을 가리는 게 신경 쓰일 때 쓴다. 너무 낮추면 눌러야 할 버튼이 안 보여서 20%까지만.
     widgetOpacity := ReadIniNum("Common", "WidgetOpacity", 20, 100, 100)
     ; 위젯을 옮겨둔 자리. 한 번도 안 옮겼으면 빈 값이고, 그때는 화면 오른쪽 아래에서 시작한다.
@@ -317,7 +321,7 @@ LoadSettings() {
 ; 경우다. 그냥 두면 IniWrite가 던진 오류가 그대로 튀어나와 수업 중에 오류 창이 뜨고 스크립트가
 ; 멈춘다. 무엇을 어떻게 하면 되는지 알려주고 계속 쓸 수 있게 한다(바꾼 값은 이번 실행 동안 유효).
 SaveSettings() {
-    global SETTINGS_PATH, SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, spotColor, clickColor, drawColor, clickEffectEnabled, clickSpeed, clickOpacity, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, hotkeyCombos, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY, widgetOnTop
+    global SETTINGS_PATH, SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, spotColor, clickColor, drawColor, clickEffectEnabled, clickSpeed, clickOpacity, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, hotkeyCombos, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY, widgetOnTop, boardMode, boardModeAsked
     try
         return WriteSettings()
     catch as err {
@@ -334,7 +338,7 @@ SaveSettings() {
 
 WriteSettings() {
     global laserHold, laserFade, laserGlow
-    global SETTINGS_PATH, SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, spotColor, clickColor, drawColor, clickEffectEnabled, clickSpeed, clickOpacity, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, hotkeyCombos, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY, widgetOnTop
+    global SETTINGS_PATH, SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, spotColor, clickColor, drawColor, clickEffectEnabled, clickSpeed, clickOpacity, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, hotkeyCombos, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY, widgetOnTop, boardMode, boardModeAsked
     IniWrite(SpotSize, SETTINGS_PATH, "Highlight", "Size")
     IniWrite(spotOpacity, SETTINGS_PATH, "Highlight", "Opacity")
     IniWrite(SpotThickness, SETTINGS_PATH, "Highlight", "RingThickness")
@@ -362,6 +366,7 @@ WriteSettings() {
     IniWrite(HexColor(widgetBgColor), SETTINGS_PATH, "Common", "WidgetColor")
     IniWrite(widgetOpacity, SETTINGS_PATH, "Common", "WidgetOpacity")
     IniWrite(widgetOnTop ? 1 : 0, SETTINGS_PATH, "Common", "WidgetOnTop")
+    IniWrite(boardMode ? 1 : 0, SETTINGS_PATH, "Common", "BoardMode")
     SaveWidgetPos() ; 위치는 옮길 때마다 따로 적지만, 저장을 누를 때도 지금 자리를 확실히 남긴다
     for name, combo in hotkeyCombos
         IniWrite(combo, SETTINGS_PATH, "Hotkeys", name)
@@ -2629,7 +2634,7 @@ IsPenOrTouch(wp) {
 OnPointerDown(wp, lp, msg, hwnd) {
     global drawOn, drawGui, penStroke, penErasing, penEraserWide, penLastX, penLastY, penIgnoreMouse
     global drawing, erasing, dragOnOtherWindow, dragShapeMode, dragPenKind, penContacts, penGesture
-    global strokeRainbow
+    global strokeRainbow, boardEraser
     Critical ; 그리는 도중에 드로잉 끄기가 끼어들지 않게 (DrawPoll 설명 참고)
     if (!drawOn || hwnd != drawGui.Hwnd || !IsPenOrTouch(wp))
         return
@@ -2662,7 +2667,7 @@ OnPointerDown(wp, lp, msg, hwnd) {
     ; 물어보면, 펜이 기울어져 플래그가 한 프레임 흔들릴 때 한 획이 반은 글씨 반은 지우개가 된다.
     ; 손날인지 펜 뒤쪽인지는 **지우는 폭이 달라지므로** 함께 기억해둔다.
     ; SetBrushMode보다 먼저 정해야 커서 테두리 원도 같은 폭으로 그려진다.
-    eraseKind := EraserKind(id)
+    eraseKind := boardEraser ? "pen" : EraserKind(id) ; 팔레트의 지우개를 골랐으면 손가락도 지우개
     penErasing := (eraseKind != "")
     penEraserWide := (eraseKind = "hand")
     penIgnoreMouse := true
@@ -3037,7 +3042,7 @@ PulseArrowHwnds() {
 DrawPoll() {
     global drawOn, drawing, erasing, lastX, lastY, dragShapeMode, drawGui
     global dragOnOtherWindow, VK_LBUTTON, VK_RBUTTON, penStroke, penIgnoreMouse, penErasing
-    global penLastX, penLastY
+    global penLastX, penLastY, boardEraser
     ; **끼어들 수 없게 한다(Critical).** 드로잉을 끌 때(F9 등) 화면 크기의 판들을 돌려주는데, 그리던
     ; 도중에 단축키가 끼어들어 판을 돌려주면 돌아와서 없는 판에 그리다 오류가 난다(실제로 났다).
     ; 한 번 도는 데 몇 ms라, 단축키는 그만큼만 기다렸다 처리된다.
@@ -3066,6 +3071,9 @@ DrawPoll() {
 
     leftDown := MouseDown(VK_LBUTTON)
     rightDown := MouseDown(VK_RBUTTON)
+    ; 전자칠판 모드 팔레트에서 지우개를 골랐으면 왼쪽(손가락) 끌기도 지우개로 쓴다
+    if (boardEraser && leftDown && !rightDown && !drawing)
+        leftDown := false, rightDown := true
     ; 획이 끝난 뒤에도 마우스 쪽은 아직 "눌림"으로 남아 있다. 그게 풀릴 때까지 흘려보내야
     ; 손을 뗀 자리에 짧은 획이 하나 더 그려지지 않는다.
     if penIgnoreMouse {
@@ -3523,8 +3531,9 @@ ToggleDraw(*) {
     global activeDrawThickness, activeDrawStep, DrawStep, activeEraserSize, activeEraserStep, EraserStep
     global PEN_BASE_PX, PEN_STEP_RATIO, ERASER_BASE_PX, ERASER_STEP_RATIO
     global erasing, brushMode, boardGui, stepGui, laserGui, penKind, activeDrawAlpha, rainbowColor
-    global capsHoldActive, inkPinned
+    global capsHoldActive, inkPinned, boardEraser, boardColorIdx
     drawOn := !drawOn
+    boardEraser := false, boardColorIdx := 0 ; 팔레트에서 고른 지우개·색은 드로잉을 켜고 끌 때마다 풀린다
     ; 숫자키와 +/-로 잠깐 바꿔둔 색·굵기·지우개 크기는 여기서 초기화한다. 드로잉을 켤 때마다
     ; 설정에 저장된 값으로 시작하고, Esc 등으로 끄면 그 자리에서 되돌아간다. A·S로 고른 특수 펜도.
     ; 단, Caps Lock을 눌렀다 뗐다 하며 이어 쓰는 동안(그림이 화면에 남아 있는 동안)은 고른 색·펜을 그대로 둔다.
@@ -4203,7 +4212,7 @@ AddHotkeyRow(gui, y, name) {
 
 OpenSettingsWindow(*) {
     global laserHold, laserFade, laserGlow
-    global SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, widget, settingsGui, hideCursorOnHighlight, spotlightOn, APP_VERSION, drawOn, chkWidgetCtrl, widgetScale, widgetOpacity, widgetOnTop
+    global SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, widget, settingsGui, hideCursorOnHighlight, spotlightOn, APP_VERSION, drawOn, chkWidgetCtrl, widgetScale, widgetOpacity, widgetOnTop, boardMode, chkBoardCtrl
     global paletteBar, PALETTE_X, PALETTE_Y, PALETTE_W, PALETTE_H, lblUpdate
     global zoomSteps, zoomSmooth
     global recMode, recMic, recSys, recFps, recFolder, recQuality, recAskQuality
@@ -4400,6 +4409,13 @@ OpenSettingsWindow(*) {
     chkOnTop.OnEvent("Click", (ctrl, *) => SetWidgetOnTop(ctrl.Value))
     lblOnTop := settingsGui.AddText("x54 y349 w460 h32", "끄면 다른 창 뒤로 갈 수 있습니다. 드로잉·라이브 줌·녹화 중에는 끄기 쉽도록 계속 위에 보입니다.")
     lblOnTop.SetFont("s9 c999999")
+
+    chkBoard := settingsGui.AddCheckbox("x30 y392 w20 h20 " (boardMode ? "Checked" : ""), "")
+    settingsGui.AddText("x54 y393 w400", "전자칠판 모드")
+    chkBoard.OnEvent("Click", (ctrl, *) => SetBoardMode(ctrl.Value))
+    chkBoardCtrl := chkBoard
+    lblBoard := settingsGui.AddText("x54 y415 w460 h48", "위젯이 크게 세로로 바뀌고 확대 +/− 버튼이 생깁니다. 드로잉을 켜면 옆에 팔레트(색 · 굵기 · 지우개 · 전부 지우기)가 열립니다.`n위젯을 길게 누르거나 오른쪽 클릭해서 바꿀 수도 있습니다.")
+    lblBoard.SetFont("s9 c999999")
 
     tabs.UseTab("일반")
     ; 항목이 적은 탭이라 왼쪽 위에 붙여두면 허전하고 잘못 만든 것처럼 보인다.
@@ -4829,10 +4845,10 @@ CHIP_ICON_SIZE := 24 ; 컬러 아이콘은 조금 크게 둬야 색이 또렷하
 ICON_OFF_COLOR := 0x000000
 ; 켜짐 상태를 표시할 색 — 위젯 버튼과 트레이 바로가기 아이콘이 같은 색을 쓴다.
 TRAY_ON_COLOR := 0x0A84FF
-; ClassZoom 위젯: 아이콘은 늘 원래 색으로 두고, 켜짐은 버튼 바탕을 노랑으로 바꿔 보여준다 (위젯 기본색은 진한 파랑)
+; ClassZoom 위젯: 아이콘은 늘 원래 색으로 두고, 켜짐은 버튼 바탕을 하늘색으로 바꿔 보여준다 (위젯 기본색은 연노랑)
 ICON_KEEP_COLOR := -1
 CHIP_OFF_FILL := 0xFFFFFF
-CHIP_ON_FILL := 0xFDE047 ; 켜짐: 노랑 (파란 위젯 위에서 흰 버튼과 확실히 구분된다)
+CHIP_ON_FILL := 0x93C5FD ; 켜짐: 하늘색 (연노랑 위젯 위에서 흰 버튼과 확실히 구분된다)
 CHIP_REC_FILL := 0xFECACA ; 녹화 중
 
 RenderButtonBitmap(fillColor, bgColor, size, corner, iconPath, iconSize, iconColor) {
@@ -4920,8 +4936,15 @@ RoundRegion(hwnd, w, h, corner) {
 ; 훨씬 확실하고, 자주 일어나는 일도 아니다.
 ; 위치는 유지한다 — 크기를 조절하는 동안 위젯이 구석으로 튀면 곤란하다.
 WidgetPx(base) {
-    global widgetScale
-    return Max(1, Round(base * widgetScale / 100))
+    global widgetScale, boardMode, BOARD_WIDGET_SCALE
+    return Max(1, Round(base * widgetScale / 100 * (boardMode ? BOARD_WIDGET_SCALE : 1)))
+}
+
+; 칸 하나의 자리 글자("x.. y.. w.. h..")를 만들고 다음 칸 자리로 넘어간다. 가로 위젯은 x를, 세로(전자칠판 모드)는 y를 늘린다.
+WidgetSlot(&pos, len, vertical, chip, pad, top, gap) {
+    s := vertical ? ("x" pad " y" pos " w" chip " h" len) : ("x" pos " y" top " w" len " h" chip)
+    pos += len + gap
+    return s
 }
 
 BuildWidget() {
@@ -4932,6 +4955,7 @@ BuildWidget() {
     global widgetW, widgetH, widgetScale, widgetBgColor, widgetX, widgetY
     global CHIP_SIZE, CHIP_CORNER, CHIP_ICON_SIZE, ICON_OFF_COLOR, TRAY_ON_COLOR, ICON_KEEP_COLOR, CHIP_OFF_FILL, CHIP_ON_FILL
     global ICON_SPOT_DARK_PATH, ICON_DRAW_DARK_PATH, ICON_SETTINGS_PATH
+    global boardMode, boardPalette, widgetTips, btnZoomPlus, btnZoomMinus, spotlightOn, drawOn
 
     ; 이전 위젯이 있으면 자리를 기억해두고 치운다 (비트맵도 함께 — 안 지우면 조절할 때마다 샌다)
     keepX := "", keepY := ""
@@ -4952,8 +4976,17 @@ BuildWidget() {
     top := WidgetPx(4)   ; 위아래 여백
     narrow := WidgetPx(14) ; 그립(⋮)·닫기(✕)처럼 글자 폭에 맞춘 좁은 칸
     gap := WidgetPx(4)   ; 칩 사이 간격
-    widgetH := chip + top * 2
-    widgetW := pad * 2 + narrow * 2 + chip * 5 + gap * 6 ; 칩 5개: 하이라이트·드로잉·라이브 줌·녹화·설정
+    ; 전자칠판 모드는 **세로 막대**에 확대 +/− 칸이 더 있다 (손이 닿는 화면 옆면 아래쪽에 세워 둔다)
+    vertical := boardMode
+    order := vertical ? ["zoom", "zplus", "zminus", "spot", "draw", "rec", "settings"] : ["spot", "draw", "zoom", "rec", "settings"]
+    n := order.Length
+    if vertical {
+        widgetW := chip + pad * 2
+        widgetH := top * 2 + narrow * 2 + chip * n + gap * (n + 1)
+    } else {
+        widgetH := chip + top * 2
+        widgetW := pad * 2 + narrow * 2 + chip * n + gap * (n + 1) ; 칩 5개: 하이라이트·드로잉·라이브 줌·녹화·설정
+    }
 
     hBtnSpotOff := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_SPOT_DARK_PATH, icon, ICON_KEEP_COLOR)
     hBtnSpotOn := RenderButtonBitmap(CHIP_ON_FILL, widgetBgColor, chip, corner, ICON_SPOT_DARK_PATH, icon, ICON_KEEP_COLOR)
@@ -4968,28 +5001,53 @@ BuildWidget() {
     widget := Gui((WidgetWantsTop() ? "+AlwaysOnTop " : "") "-Caption +ToolWindow", "ClassZoom")
     widget.BackColor := HexColor(widgetBgColor)
     ; 배경이 어두우면 ⋮와 ✕가 묻히므로 글자색을 뒤집는다 (밝기 기준은 사람 눈의 민감도 가중치)
-    widget.SetFont("s" Max(6, WidgetPx(10)) " c" (WidgetIsDark() ? "E6E6E6" : "000000"), "Malgun Gothic")
+    textColor := WidgetIsDark() ? "E6E6E6" : "000000"
+    widget.SetFont("s" Max(6, WidgetPx(10)) " c" textColor, "Malgun Gothic")
+    widgetTips := [] ; 마우스를 올리면 뜨는 설명 (위젯을 새로 만들 때마다 다시 모은다)
 
-    x := pad
-    grip := widget.AddText("x" x " y" top " w" narrow " h" chip " Center +0x200", "⋮")
-    x += narrow + gap
-    btnSpotOff := widget.AddPicture("x" x " y" top " w" chip " h" chip, "HBITMAP:" hBtnSpotOff)
-    btnSpotOn := widget.AddPicture("x" x " y" top " w" chip " h" chip " Hidden", "HBITMAP:" hBtnSpotOn)
-    x += chip + gap
-    btnDrawOff := widget.AddPicture("x" x " y" top " w" chip " h" chip, "HBITMAP:" hBtnDrawOff)
-    btnDrawOn := widget.AddPicture("x" x " y" top " w" chip " h" chip " Hidden", "HBITMAP:" hBtnDrawOn)
-    x += chip + gap
-    ; 확대 버튼 (zoom.ahk). 위젯을 다시 만들 때도 지금 켜짐/꺼짐 상태 그대로 그린다
-    btnZoomOff := widget.AddPicture("x" x " y" top " w" chip " h" chip (zoomOn ? " Hidden" : ""), "HBITMAP:" hBtnZoomOff)
-    btnZoomOn := widget.AddPicture("x" x " y" top " w" chip " h" chip (zoomOn ? "" : " Hidden"), "HBITMAP:" hBtnZoomOn)
-    x += chip + gap
-    ; 녹화 버튼 (record.ahk). 녹화 중(일시정지·저장 중 포함)에는 바탕이 연한 빨강
-    btnRecOff := widget.AddPicture("x" x " y" top " w" chip " h" chip (recState != "" ? " Hidden" : ""), "HBITMAP:" hBtnRecOff)
-    btnRecOn := widget.AddPicture("x" x " y" top " w" chip " h" chip (recState != "" ? "" : " Hidden"), "HBITMAP:" hBtnRecOn)
-    x += chip + gap
-    btnSettings := widget.AddPicture("x" x " y" top " w" chip " h" chip, "HBITMAP:" hBtnSettings)
-    x += chip + gap
-    btnClose := widget.AddText("x" x " y" top " w" narrow " h" chip " Center +0x200", "✕")
+    p := vertical ? top : pad
+    grip := widget.AddText(WidgetSlot(&p, narrow, vertical, chip, pad, top, gap) " Center +0x200", vertical ? "⋯" : "⋮")
+    AddWidgetTip(grip, "grip")
+    btnZoomPlus := "", btnZoomMinus := ""
+    for kind in order {
+        slot := WidgetSlot(&p, chip, vertical, chip, pad, top, gap)
+        switch kind {
+        case "spot":
+            btnSpotOff := widget.AddPicture(slot (spotlightOn ? " Hidden" : ""), "HBITMAP:" hBtnSpotOff)
+            btnSpotOn := widget.AddPicture(slot (spotlightOn ? "" : " Hidden"), "HBITMAP:" hBtnSpotOn)
+            AddWidgetTip(btnSpotOff, "spot"), AddWidgetTip(btnSpotOn, "spot")
+        case "draw":
+            btnDrawOff := widget.AddPicture(slot (drawOn ? " Hidden" : ""), "HBITMAP:" hBtnDrawOff)
+            btnDrawOn := widget.AddPicture(slot (drawOn ? "" : " Hidden"), "HBITMAP:" hBtnDrawOn)
+            AddWidgetTip(btnDrawOff, "draw"), AddWidgetTip(btnDrawOn, "draw")
+        case "zoom":
+            ; 확대 버튼 (zoom.ahk). 위젯을 다시 만들 때도 지금 켜짐/꺼짐 상태 그대로 그린다
+            btnZoomOff := widget.AddPicture(slot (zoomOn ? " Hidden" : ""), "HBITMAP:" hBtnZoomOff)
+            btnZoomOn := widget.AddPicture(slot (zoomOn ? "" : " Hidden"), "HBITMAP:" hBtnZoomOn)
+            AddWidgetTip(btnZoomOff, "zoom"), AddWidgetTip(btnZoomOn, "zoom")
+        case "zplus", "zminus":
+            ; 전자칠판 모드: Ctrl+휠 대신 손가락으로 누르는 확대 +/− (흰 칸에 큰 글자)
+            widget.SetFont("s" Max(8, WidgetPx(15)) " bold c1E293B")
+            t := widget.AddText(slot " Center +0x200 BackgroundFFFFFF", kind = "zplus" ? "+" : "−")
+            widget.SetFont("s" Max(6, WidgetPx(10)) " norm c" textColor)
+            t.OnEvent("Click", BoardZoomStep.Bind(kind = "zplus" ? 1 : -1))
+            AddWidgetTip(t, kind)
+            if (kind = "zplus")
+                btnZoomPlus := t
+            else
+                btnZoomMinus := t
+        case "rec":
+            ; 녹화 버튼 (record.ahk). 녹화 중(일시정지·저장 중 포함)에는 바탕이 연한 빨강
+            btnRecOff := widget.AddPicture(slot (recState != "" ? " Hidden" : ""), "HBITMAP:" hBtnRecOff)
+            btnRecOn := widget.AddPicture(slot (recState != "" ? "" : " Hidden"), "HBITMAP:" hBtnRecOn)
+            AddWidgetTip(btnRecOff, "rec"), AddWidgetTip(btnRecOn, "rec")
+        case "settings":
+            btnSettings := widget.AddPicture(slot, "HBITMAP:" hBtnSettings)
+            AddWidgetTip(btnSettings, "settings")
+        }
+    }
+    btnClose := widget.AddText(WidgetSlot(&p, narrow, vertical, chip, pad, top, gap) " Center +0x200", "✕")
+    AddWidgetTip(btnClose, "close")
 
     for ctrl in [btnSpotOff, btnSpotOn]
         ctrl.OnEvent("Click", ToggleSpotlight)
@@ -5000,7 +5058,7 @@ BuildWidget() {
         ctrl.OnEvent("Click", ToggleZoom)
     for ctrl in [btnRecOff, btnRecOn]
         ctrl.OnEvent("Click", RecToggle)
-    ; 녹화 버튼을 오른쪽 클릭하면 "모니터 전체 / 영역 지정"을 고른다
+    ; 오른쪽 클릭(전자칠판에서는 길게 누르기): 녹화 버튼이면 "모니터 전체 / 영역 지정", 그 밖이면 전자칠판 모드 메뉴
     widget.OnEvent("ContextMenu", WidgetContextMenu)
     ; 위젯의 ✕는 프로그램 종료가 아니라 위젯만 숨김 (트레이 메뉴의 "위젯 표시"나 설정 창의
     ; "위젯" 탭에서 다시 켤 수 있음)
@@ -5010,6 +5068,11 @@ BuildWidget() {
     ; showWidget은 계속 참이어서, 설정 창의 "위젯 활성화"가 체크된 채로 보이고 한 번 눌러도
     ; 다시 나타나지 않는 버그가 있었다. 그래서 global을 선언할 수 있는 보통 함수로 둔다.
     btnClose.OnEvent("Click", (*) => SetWidgetVisible(false))
+    ; 팔레트는 위젯의 크기·색을 따르므로 위젯을 새로 만들면 다음에 띄울 때 새로 만든다
+    if IsObject(boardPalette) {
+        try boardPalette.Destroy()
+        boardPalette := ""
+    }
 
     ; 이전 위젯이 없었으면(= 프로그램을 막 켠 것) 지난번에 옮겨둔 자리부터 찾는다.
     ; 그마저 없으면(처음 쓰는 PC) 화면 오른쪽 아래에서 시작한다.
@@ -5174,6 +5237,7 @@ OnWidgetExitMove(wParam, lParam, msg, hwnd) {
         widgetDragging := false
         RaiseWidget()
         SaveWidgetPos() ; 옮긴 자리를 바로 기억한다 (다음에 켤 때 그 자리에서 시작)
+        UpdateBoardPalette() ; 팔레트도 위젯 옆으로 따라온다
     }
 }
 OnMessage(0x0232, OnWidgetExitMove) ; WM_EXITSIZEMOVE
@@ -5285,9 +5349,17 @@ ClampWidgetIntoScreen() {
 }
 
 WidgetContextMenu(g, ctrl, *) {
-    global btnRecOff, btnRecOn, recState
-    if !(IsObject(ctrl) && (ctrl = btnRecOff || ctrl = btnRecOn))
+    global btnRecOff, btnRecOn, recState, boardMode
+    ; 녹화 버튼이 아닌 곳: 전자칠판 모드 켜고 끄기 (칠판에서는 위젯을 길게 누르면 Windows가 오른쪽 클릭으로 보낸다)
+    if !(IsObject(ctrl) && (ctrl = btnRecOff || ctrl = btnRecOn)) {
+        m := Menu()
+        m.Add("전자칠판 모드", (*) => SetBoardMode(!boardMode))
+        if boardMode
+            m.Check("전자칠판 모드")
+        m.Add("설정 열기", OpenSettingsWindow)
+        m.Show()
         return
+    }
     m := Menu()
     if (recState = "") {
         m.Add("모니터 전체 녹화", (*) => RecStart(false))
@@ -5315,6 +5387,7 @@ UpdateWidgetState() {
     ; "항상 위"를 끈 경우, 드로잉·줌·녹화가 모두 끝나면 위젯을 보통 창으로 되돌린다
     if !WidgetWantsTop()
         try WinSetAlwaysOnTop(false, widget)
+    UpdateBoardPalette() ; 전자칠판 모드: 드로잉 중에만 팔레트를 위젯 옆에 띄운다
 
     if showTrayIcons {
         SetQuickTrayIcon(1, spotlightOn ? hIconSpotOn : hIconSpotOff)
@@ -5512,6 +5585,233 @@ OnWidgetDrag(wParam, lParam, msg, hwnd) {
     try {
         if (hwnd = widget.Hwnd || hwnd = grip.Hwnd)
             PostMessage(0xA1, 2, , , widget.Hwnd) ; WM_NCLBUTTONDOWN, HTCAPTION
+    }
+}
+
+; ================= 전자칠판 모드 =================
+; 칠판 앞에는 키보드가 없다. 위젯을 1.5배 크기의 세로 막대로 바꿔 확대 +/− 버튼을 더하고, 드로잉을 켜면
+; 위젯 옆에 팔레트(색 · 굵기 · 지우개 · 전부 지우기)를 띄워 손가락만으로 쓰게 한다.
+BOARD_WIDGET_SCALE := 1.5
+BOARD_PALETTE_COLORS := [1, 5, 4, 3, 8, 9] ; 숫자키 색 번호: 빨강 · 파랑 · 초록 · 노랑 · 검정 · 흰색
+boardPalette := ""        ; 팔레트 창 (위젯을 새로 만들면 다음에 띄울 때 새로 만든다)
+boardSwatches := []       ; [칸, 색 번호]
+boardEraserBtn := "", boardPaletteW := 0, boardPaletteH := 0
+boardEraser := false      ; 팔레트의 지우개를 골랐는가 (켜면 손가락·왼쪽 끌기도 지운다)
+boardColorIdx := 0        ; 팔레트에서 고른 색 번호 (0 = 아직 안 고름)
+chkBoardCtrl := ""        ; 설정 창의 체크박스 (메뉴로 바꿔도 따라오게)
+widgetTips := []          ; [칸, 설명 종류] — 마우스를 올리면 뜨는 설명
+widgetTipCtrl := "", widgetTipSince := 0, widgetTipShown := false
+
+SetBoardMode(on) {
+    global boardMode, showWidget, SETTINGS_PATH, chkBoardCtrl
+    boardMode := on ? true : false
+    BuildWidget()
+    SetWidgetVisible(showWidget)
+    MoveWidgetToDefaultPos() ; 가로 ↔ 세로로 모양이 바뀌므로 처음 자리(오른쪽 아래)로
+    UpdateWidgetState()
+    try IniWrite(boardMode ? 1 : 0, SETTINGS_PATH, "Common", "BoardMode") ; 메뉴에서 바꿔도 다음 실행에 남게 바로 적는다
+    if IsObject(chkBoardCtrl)
+        try chkBoardCtrl.Value := boardMode
+}
+
+; 확대 +/−: 꺼져 있으면 +는 1단계로 켜고, 1단계에서 −를 누르면 끈다
+BoardZoomStep(d, *) {
+    global zoomOn, zoomStep
+    if !zoomOn {
+        if (d > 0)
+            ZoomStart(1)
+    } else if (d < 0 && zoomStep <= 1)
+        ZoomStop()
+    else
+        ZoomSetStep(zoomStep + d)
+}
+
+ColorIsDark(c) {
+    r := (c >> 16) & 0xFF, g := (c >> 8) & 0xFF, b := c & 0xFF
+    return (r * 299 + g * 587 + b * 114) / 1000 < 128
+}
+
+BuildBoardPalette() {
+    global boardPalette, boardSwatches, boardEraserBtn, BOARD_PALETTE_COLORS, DRAW_COLORS, widgetBgColor, boardPaletteW, boardPaletteH
+    boardPalette := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000", "ClassZoom-Palette") ; 0x08000000 = 눌러도 활성화되지 않음
+    boardPalette.BackColor := HexColor(widgetBgColor)
+    cell := WidgetPx(32), pad := WidgetPx(6), gap := WidgetPx(4)
+    boardPalette.SetFont("s" Max(8, WidgetPx(13)) " bold", "Malgun Gothic")
+    y := pad
+    boardSwatches := []
+    for idx in BOARD_PALETTE_COLORS {
+        c := DRAW_COLORS[idx]
+        t := boardPalette.AddText("x" pad " y" y " w" cell " h" cell " Center +0x200 Background" HexColor(c) " c" (ColorIsDark(c) ? "FFFFFF" : "000000"), "")
+        t.OnEvent("Click", BoardPickColor.Bind(idx))
+        boardSwatches.Push([t, idx])
+        AddWidgetTip(t, "c" idx)
+        y += cell + gap
+    }
+    for item in [["+", "thick+"], ["−", "thick-"], ["지", "eraser"], ["✕", "clear"]] {
+        t := boardPalette.AddText("x" pad " y" y " w" cell " h" cell " Center +0x200 BackgroundFFFFFF c1E293B", item[1])
+        switch item[2] {
+        case "thick+": t.OnEvent("Click", (*) => AdjustDrawThickness(1))
+        case "thick-": t.OnEvent("Click", (*) => AdjustDrawThickness(-1))
+        case "eraser":
+            t.OnEvent("Click", BoardToggleEraser)
+            boardEraserBtn := t
+        case "clear": t.OnEvent("Click", (*) => ClearDrawing())
+        }
+        AddWidgetTip(t, item[2])
+        y += cell + gap
+    }
+    w := cell + pad * 2, h := y - gap + pad
+    boardPaletteW := w, boardPaletteH := h ; 숨긴 창은 크기를 읽기 어려워 여기서 기억해 둔다
+    boardPalette.Show("Hide w" w " h" h)
+    RoundRegion(boardPalette.Hwnd, w, h, WidgetPx(16))
+}
+
+BoardPickColor(idx, *) {
+    global boardEraser, boardColorIdx
+    boardEraser := false, boardColorIdx := idx
+    SetDrawColor(idx)
+    BoardMarkSelection()
+}
+
+BoardToggleEraser(*) {
+    global boardEraser
+    boardEraser := !boardEraser
+    BoardMarkSelection()
+}
+
+; 고른 색에는 ✓, 지우개를 고르면 그 칸이 하늘색
+BoardMarkSelection() {
+    global boardSwatches, boardEraserBtn, boardEraser, boardColorIdx, CHIP_ON_FILL
+    for it in boardSwatches
+        try it[1].Value := (!boardEraser && it[2] = boardColorIdx) ? "✓" : ""
+    if IsObject(boardEraserBtn)
+        try boardEraserBtn.Opt("Background" (boardEraser ? HexColor(CHIP_ON_FILL) : "FFFFFF")), boardEraserBtn.Redraw()
+}
+
+; 전자칠판 모드에서 드로잉 중이면 팔레트를 위젯 옆(왼쪽, 자리가 없으면 오른쪽)에 아래를 맞춰 띄운다
+UpdateBoardPalette() {
+    global boardPalette, boardMode, drawOn, showWidget, widget, boardPaletteW, boardPaletteH
+    if !(boardMode && drawOn && showWidget && IsSet(widget) && widget) {
+        if IsObject(boardPalette)
+            try boardPalette.Hide()
+        return
+    }
+    if !IsObject(boardPalette)
+        BuildBoardPalette()
+    BoardMarkSelection()
+    try WinGetPos(&x, &y, &w, &h, widget)
+    catch
+        return
+    pw := boardPaletteW, ph := boardPaletteH
+    gap := WidgetPx(6)
+    px := x - pw - gap
+    if GetMonitorAt(x + w // 2, y + h // 2, &ml, &mt, &mr, &mb, &wl, &wt, &wr, &wb) {
+        if (px < ml)
+            px := x + w + gap
+        py := Max(mt, y + h - ph)
+    } else
+        py := y + h - ph
+    boardPalette.Show("NA x" px " y" py)
+    ; 판서 층 위에 있어야 눌린다 (-1 = HWND_TOPMOST, 크기·위치 유지, 활성화하지 않음)
+    try DllCall("SetWindowPos", "ptr", boardPalette.Hwnd, "ptr", -1, "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x1 | 0x2 | 0x10)
+}
+
+; 터치 화면이 있는 PC에서 처음 한 번만 "전자칠판 모드로 쓸까요?"를 묻는다 (사용 방법 창이 떠 있으면 닫힌 뒤에)
+MaybeAskBoardMode() {
+    global boardMode, boardModeAsked, SETTINGS_PATH, usageGui
+    if (boardMode || boardModeAsked)
+        return
+    if (DllCall("GetSystemMetrics", "int", 95) < 1) ; SM_MAXIMUMTOUCHES: 터치 화면이 없으면 묻지 않는다 (나중에 칠판을 연결하면 그때 묻는다)
+        return
+    if (IsSet(usageGui) && usageGui != "") {
+        SetTimer(MaybeAskBoardMode, -2000)
+        return
+    }
+    boardModeAsked := true
+    try IniWrite(1, SETTINGS_PATH, "Common", "BoardModeAsked")
+    if (MsgBox("터치 화면이 있는 PC입니다.`n`n전자칠판 모드로 쓸까요?`n위젯이 크게 세로로 바뀌고, 확대 +/− 버튼과 드로잉 팔레트(색 · 굵기 · 지우개)가 생깁니다.`n`n나중에 설정 → 위젯 탭이나 위젯을 길게 눌러 바꿀 수 있습니다."
+        , "ClassZoom - 전자칠판 모드", "YesNo Icon?") = "Yes")
+        SetBoardMode(true)
+}
+
+; ---- 마우스를 올리면 뜨는 설명 ----
+AddWidgetTip(ctrl, kind) {
+    global widgetTips
+    widgetTips.Push([ctrl, kind])
+}
+
+WidgetTipText(kind) {
+    global DRAW_COLOR_NAMES
+    switch kind {
+    case "grip": return "끌어서 옮기기"
+    case "spot": return "마우스 하이라이트" WidgetTipKey("Spotlight")
+    case "draw": return "드로잉" WidgetTipKey("Draw")
+    case "zoom": return "라이브 줌" WidgetTipKey("Zoom") " · 누를 때마다 1 → 2 → 3단계 → 끄기"
+    case "zplus": return "확대 단계 올리기"
+    case "zminus": return "확대 단계 내리기 (1단계에서 누르면 끄기)"
+    case "rec": return "화면 녹화" WidgetTipKey("Record") " · 오른쪽 클릭: 영역 지정"
+    case "settings": return "설정 · 위젯을 오른쪽 클릭하면 전자칠판 모드"
+    case "close": return "위젯 숨기기 (트레이 메뉴에서 다시 켬)"
+    case "thick+": return "펜 굵게"
+    case "thick-": return "펜 가늘게"
+    case "eraser": return "지우개 (켜면 손가락으로 지웁니다)"
+    case "clear": return "전부 지우기"
+    }
+    if (SubStr(kind, 1, 1) = "c")
+        return DRAW_COLOR_NAMES[Integer(SubStr(kind, 2))] " 펜"
+    return ""
+}
+
+; 설명 끝에 붙는 지금 단축키 (" (F7)")
+WidgetTipKey(name) {
+    global hotkeyCombos
+    return hotkeyCombos.Has(name) ? " (" HotkeyText(hotkeyCombos[name]) ")" : ""
+}
+
+; 위젯·팔레트 위에서 마우스가 움직이면 설명을 살피기 시작한다
+OnWidgetHover(wParam, lParam, msg, hwnd) {
+    global widget, boardPalette
+    root := DllCall("GetAncestor", "ptr", hwnd, "uint", 2, "ptr") ; GA_ROOT
+    if ((IsSet(widget) && widget && root = widget.Hwnd) || (IsObject(boardPalette) && root = boardPalette.Hwnd))
+        SetTimer(WidgetTipPoll, 100)
+}
+OnMessage(0x0200, OnWidgetHover) ; WM_MOUSEMOVE
+
+; 커서 아래 칸을 찾아 0.4초 머무르면 설명을 띄우고, 칸을 벗어나면 지운다
+WidgetTipPoll() {
+    global widgetTips, widgetTipCtrl, widgetTipSince, widgetTipShown
+    pt := Buffer(8, 0)
+    DllCall("GetCursorPos", "ptr", pt)
+    px := NumGet(pt, 0, "Int"), py := NumGet(pt, 4, "Int")
+    found := ""
+    for it in widgetTips {
+        try {
+            c := it[1]
+            if !c.Visible
+                continue
+            c.GetPos(&cx, &cy, &cw, &ch)
+            WinGetPos(&gx, &gy, , , c.Gui)
+            if (px >= gx + cx && px < gx + cx + cw && py >= gy + cy && py < gy + cy + ch) {
+                found := it
+                break
+            }
+        }
+    }
+    if !IsObject(found) {
+        ToolTip(, , , 19)
+        widgetTipCtrl := "", widgetTipShown := false
+        SetTimer(WidgetTipPoll, 0)
+        return
+    }
+    if (widgetTipCtrl != found[1]) {
+        ToolTip(, , , 19)
+        widgetTipCtrl := found[1], widgetTipSince := A_TickCount, widgetTipShown := false
+        return
+    }
+    if (!widgetTipShown && A_TickCount - widgetTipSince >= 400) {
+        CoordMode("ToolTip", "Screen")
+        ToolTip(WidgetTipText(found[2]), px + 16, py + 20, 19)
+        widgetTipShown := true
     }
 }
 
@@ -5853,3 +6153,4 @@ ChangeHotkey(name, combo, ctrl) {
 ; 위젯·단축키가 모두 준비된 뒤에 띄운다. "다음부터 보지 않기"를 체크했으면 뜨지 않는다 (guide.ahk).
 if showGuideOnStart
     SetTimer(ShowUsageGuide, -600)
+SetTimer(MaybeAskBoardMode, -2500) ; 터치 화면이 있는 PC면 전자칠판 모드를 한 번 묻는다
