@@ -41,7 +41,8 @@ final class Settings: ObservableObject {
     @Published var showWidget = true
     @Published var showTrayIcons = false // 메뉴 막대에 강조·드로잉 아이콘을 따로 둔다
     @Published var widgetScale: Double = 100
-    @Published var widgetColor: UInt32 = 0xF2F2F2
+    @Published var widgetColor: UInt32 = WIDGET_DEFAULT_COLOR
+    @Published var widgetOnTop = true // 위젯을 늘 다른 창들 위에 (끄면 보통 창. 드로잉·줌·녹화 중에는 그래도 위)
     @Published var widgetOpacity: Double = 100
     // 라이브 줌 (ClassZoom): 1·2·3단계 배율(%), 부드럽게 확대·축소
     @Published var zoomLevel1: Double = 150
@@ -123,6 +124,8 @@ final class Settings: ObservableObject {
         }
         // 항목표(SettingsSchema)대로 읽는다: 못 읽는 값은 기본값, 범위 밖 숫자는 끝값
         for k in SettingsSchema.keys { k.write(self, k.parse(ini.value(k.section, k.key)) ?? k.defaultValue) }
+        // 예전 기본색(연회색)을 그대로 쓰던 경우만 새 기본색(진한 파랑)으로. 일부러 고른 색은 그대로 둔다
+        if widgetColor == WIDGET_OLD_DEFAULT_COLOR { widgetColor = WIDGET_DEFAULT_COLOR }
         widgetX = ini.value("Common", "WidgetX").flatMap(Double.init).flatMap { $0.isFinite ? $0 : nil }
         widgetY = ini.value("Common", "WidgetY").flatMap(Double.init).flatMap { $0.isFinite ? $0 : nil }
         // 단축키: 알아볼 수 없거나 ⌃·⌥ 없이 위험한 조합이면 기본값으로 (단축키가 하나도 안 먹는 채로 시작하지 않게)

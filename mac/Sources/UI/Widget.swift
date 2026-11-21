@@ -1,10 +1,13 @@
 import AppKit
 
 // 화면 구석의 작은 조작판: ⋮(옮기기) · 하이라이트 · 드로잉 · 라이브 줌 · 녹화 · 설정 · ✕(숨기기)
-// 아이콘은 컬러 그림을 그대로 쓰고, 켜진 칸은 바탕을 하늘색(녹화 중은 연한 빨강)으로 칠한다 (Windows 판과 같음).
+// 아이콘은 컬러 그림을 그대로 쓰고, 켜진 칸은 바탕을 노랑(녹화 중은 연한 빨강)으로 칠한다 (Windows 판과 같음).
 // Windows 판과 같은 크기 비율(칩 32, 모서리 12, 아이콘 22)을 쓴다.
 
 let ON_COLOR: UInt32 = 0x0A84FF
+// 위젯 기본색: 진한 파랑 (흰 문서·어두운 영상 어디서나 눈에 띈다, 1.3.4부터). 예전 기본은 연회색
+let WIDGET_DEFAULT_COLOR: UInt32 = 0x2563EB
+let WIDGET_OLD_DEFAULT_COLOR: UInt32 = 0xF2F2F2
 
 func tintedIcon(_ name: String, _ tint: NSColor) -> NSImage? {
     guard let url = Bundle.main.url(forResource: name, withExtension: "png"),
@@ -108,11 +111,11 @@ final class WidgetView: NSView {
 
         let corner = WidgetView.px(12) / 2
         let iconSize = WidgetView.px(24)
-        let onFill = NSColor(calibratedRed: 0xBF / 255, green: 0xDB / 255, blue: 0xFE / 255, alpha: 1)
+        let onFill = NSColor(calibratedRed: 0xFD / 255, green: 0xE0 / 255, blue: 0x47 / 255, alpha: 1) // 켜짐: 노랑 (Windows와 같음)
         let recFill = NSColor(calibratedRed: 0xFE / 255, green: 0xCA / 255, blue: 0xCA / 255, alpha: 1)
         for (part, key, on) in [(Part.spot, "spot", spotOn), (.draw, "draw", drawOn), (.zoom, "zoom", zoomOn), (.record, "record", recOn), (.settings, "settings", false)] {
             let r = rect(part)
-            // 칸: 흰 바탕(켜지면 하늘색, 녹화 중은 연한 빨강) + 얇은 테두리. 누르는 동안은 옅게 어둡게.
+            // 칸: 흰 바탕(켜지면 노랑, 녹화 중은 연한 빨강) + 얇은 테두리. 누르는 동안은 옅게 어둡게.
             let edge = color(s.widgetColor).blended(withFraction: 0.5, of: isDark ? .white : .black) ?? .gray
             let chip = NSBezierPath(roundedRect: r.insetBy(dx: 0.5, dy: 0.5), xRadius: corner, yRadius: corner)
             (on ? (part == .record ? recFill : onFill) : NSColor.white).setFill()
@@ -258,9 +261,17 @@ final class WidgetView: NSView {
         let o = window.frame.origin
         window.setFrame(NSRect(origin: o, size: WidgetView.size), display: true)
         window.alphaValue = CGFloat(s.widgetOpacity) / 100
+        updateLevel()
         view.needsDisplay = true
         window.invalidateShadow() // 크기·색이 바뀌면 그림자도 새 모양으로
         clampIntoScreen()
+    }
+
+    // "항상 다른 창 위에 표시"를 껐으면 보통 창 높이로. 드로잉·라이브 줌·녹화 중에는 판 위에서 눌러 끌 수 있게 그래도 위로
+    func updateLevel() {
+        let top = Settings.shared.widgetOnTop || state.drawOn || state.zoomOn || state.recording
+        let level = top ? WIDGET_LEVEL : .normal
+        if window.level != level { window.level = level }
     }
 
     func setVisible(_ on: Bool) {
@@ -268,13 +279,14 @@ final class WidgetView: NSView {
         if isOffActiveSpace(window) {
             // 숨겼던 위젯을 전체 화면 데스크톱에서 다시 띄우면 나타나지 않으므로, 새 창으로 옮겨 띄운다
             let old: GlassPanel = window
-            let w = Widget.makeWindow(view) // view가 새 창으로 옮겨 간다
+            let w = Widget.makeWindow(view) // view가 새 창으로 옮겨 간다 (높이는 아래 updateLevel이 다시 맞춘다)
             w.setFrame(old.frame, display: false)
             w.alphaValue = old.alphaValue
             old.orderOut(nil); old.close()
             window = w
             Log.log("WIDGET", "rebuilt reason=offSpace")
         }
+        updateLevel()
         window.orderFrontRegardless()
     }
 

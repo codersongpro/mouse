@@ -9,7 +9,7 @@
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
 ;@Ahk2Exe-SetDescription ClassZoom
-;@Ahk2Exe-SetVersion 1.3.3
+;@Ahk2Exe-SetVersion 1.3.4
 ;@Ahk2Exe-SetCopyright © 2026 송동석 (Songpro / Dustin). MIT License
 ;@Ahk2Exe-SetCompanyName Songpro
 
@@ -57,7 +57,7 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.3.3"
+APP_VERSION := "1.3.4"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
@@ -240,7 +240,7 @@ LoadSettings() {
     global SETTINGS_PATH, SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep
     global STEP_MAX, PEN_BASE_PX, PEN_STEP_RATIO, ERASER_BASE_PX, ERASER_STEP_RATIO
     global spotColor, clickColor, drawColor, laserHold, laserFade, laserGlow
-    global clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY
+    global clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY, widgetOnTop
     global HOTKEY_DEFAULTS, hotkeyCombos, DEFAULT_DRAW_STEP, DEFAULT_ERASER_STEP
     SpotSize := ReadIniNum("Highlight", "Size", 30, 200, 130)
     ; 예전 버전은 투명도를 0~255로 저장했었다. 그 값이 남아있어도 안전하게 0~100으로 잘려 들어가도록 한다.
@@ -287,7 +287,12 @@ LoadSettings() {
     showTrayIcons := IniRead(SETTINGS_PATH, "Common", "ShowTrayIcons", 0) = 1
     ; 위젯 크기는 100%가 기준. 빔프로젝터로 크게 띄우거나 고해상도 노트북에서 작게 보일 때 쓴다.
     widgetScale := ReadIniNum("Common", "WidgetScale", 60, 250, 100)
-    widgetBgColor := ReadIniColor("Common", "WidgetColor", 0xF2F2F2)
+    ; 기본은 진한 파랑: 흰 문서·어두운 영상 어디에 두어도 눈에 잘 띈다 (1.3.4부터, 예전 기본은 연회색 F2F2F2)
+    widgetBgColor := ReadIniColor("Common", "WidgetColor", 0x2563EB)
+    if (widgetBgColor = 0xF2F2F2) ; 예전 기본색을 그대로 쓰던 PC도 새 기본색으로 (일부러 고른 색은 그대로)
+        widgetBgColor := 0x2563EB
+    ; 위젯을 늘 다른 창들 위에 둘지. 끄면 다른 창 뒤로 갈 수 있다 (드로잉·라이브 줌·녹화 중에는 위젯을 눌러 끌 수 있게 여전히 위에 둔다)
+    widgetOnTop := IniRead(SETTINGS_PATH, "Common", "WidgetOnTop", 1) = 1
     ; 위젯이 수업 화면을 가리는 게 신경 쓰일 때 쓴다. 너무 낮추면 눌러야 할 버튼이 안 보여서 20%까지만.
     widgetOpacity := ReadIniNum("Common", "WidgetOpacity", 20, 100, 100)
     ; 위젯을 옮겨둔 자리. 한 번도 안 옮겼으면 빈 값이고, 그때는 화면 오른쪽 아래에서 시작한다.
@@ -312,7 +317,7 @@ LoadSettings() {
 ; 경우다. 그냥 두면 IniWrite가 던진 오류가 그대로 튀어나와 수업 중에 오류 창이 뜨고 스크립트가
 ; 멈춘다. 무엇을 어떻게 하면 되는지 알려주고 계속 쓸 수 있게 한다(바꾼 값은 이번 실행 동안 유효).
 SaveSettings() {
-    global SETTINGS_PATH, SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, spotColor, clickColor, drawColor, clickEffectEnabled, clickSpeed, clickOpacity, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, hotkeyCombos, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY
+    global SETTINGS_PATH, SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, spotColor, clickColor, drawColor, clickEffectEnabled, clickSpeed, clickOpacity, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, hotkeyCombos, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY, widgetOnTop
     try
         return WriteSettings()
     catch as err {
@@ -329,7 +334,7 @@ SaveSettings() {
 
 WriteSettings() {
     global laserHold, laserFade, laserGlow
-    global SETTINGS_PATH, SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, spotColor, clickColor, drawColor, clickEffectEnabled, clickSpeed, clickOpacity, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, hotkeyCombos, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY
+    global SETTINGS_PATH, SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, spotColor, clickColor, drawColor, clickEffectEnabled, clickSpeed, clickOpacity, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, hotkeyCombos, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY, widgetOnTop
     IniWrite(SpotSize, SETTINGS_PATH, "Highlight", "Size")
     IniWrite(spotOpacity, SETTINGS_PATH, "Highlight", "Opacity")
     IniWrite(SpotThickness, SETTINGS_PATH, "Highlight", "RingThickness")
@@ -356,6 +361,7 @@ WriteSettings() {
     IniWrite(widgetScale, SETTINGS_PATH, "Common", "WidgetScale")
     IniWrite(HexColor(widgetBgColor), SETTINGS_PATH, "Common", "WidgetColor")
     IniWrite(widgetOpacity, SETTINGS_PATH, "Common", "WidgetOpacity")
+    IniWrite(widgetOnTop ? 1 : 0, SETTINGS_PATH, "Common", "WidgetOnTop")
     SaveWidgetPos() ; 위치는 옮길 때마다 따로 적지만, 저장을 누를 때도 지금 자리를 확실히 남긴다
     for name, combo in hotkeyCombos
         IniWrite(combo, SETTINGS_PATH, "Hotkeys", name)
@@ -4197,7 +4203,7 @@ AddHotkeyRow(gui, y, name) {
 
 OpenSettingsWindow(*) {
     global laserHold, laserFade, laserGlow
-    global SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, widget, settingsGui, hideCursorOnHighlight, spotlightOn, APP_VERSION, drawOn, chkWidgetCtrl, widgetScale, widgetOpacity
+    global SpotSize, spotOpacity, SpotThickness, DrawOpacity, DrawStep, EraserStep, clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, widget, settingsGui, hideCursorOnHighlight, spotlightOn, APP_VERSION, drawOn, chkWidgetCtrl, widgetScale, widgetOpacity, widgetOnTop
     global paletteBar, PALETTE_X, PALETTE_Y, PALETTE_W, PALETTE_H, lblUpdate
     global zoomSteps, zoomSmooth
     global recMode, recMic, recSys, recFps, recFolder, recQuality, recAskQuality
@@ -4388,6 +4394,12 @@ OpenSettingsWindow(*) {
     btnResetPos.OnEvent("Click", (*) => MoveWidgetToDefaultPos())
     lblResetPos := settingsGui.AddText("x100 y286 w340", "어디 뒀는지 모를 때 화면 오른쪽 아래로 가져옵니다.")
     lblResetPos.SetFont("s9 c999999")
+
+    chkOnTop := settingsGui.AddCheckbox("x30 y326 w20 h20 " (widgetOnTop ? "Checked" : ""), "")
+    settingsGui.AddText("x54 y327 w400", "항상 다른 창 위에 표시")
+    chkOnTop.OnEvent("Click", (ctrl, *) => SetWidgetOnTop(ctrl.Value))
+    lblOnTop := settingsGui.AddText("x54 y349 w460 h32", "끄면 다른 창 뒤로 갈 수 있습니다. 드로잉·라이브 줌·녹화 중에는 끄기 쉽도록 계속 위에 보입니다.")
+    lblOnTop.SetFont("s9 c999999")
 
     tabs.UseTab("일반")
     ; 항목이 적은 탭이라 왼쪽 위에 붙여두면 허전하고 잘못 만든 것처럼 보인다.
@@ -4814,14 +4826,13 @@ widgetH := 40
 CHIP_SIZE := 32
 CHIP_CORNER := 12
 CHIP_ICON_SIZE := 24 ; 컬러 아이콘은 조금 크게 둬야 색이 또렷하다
-WIDGET_BG_COLOR := 0xF2F2F2
 ICON_OFF_COLOR := 0x000000
 ; 켜짐 상태를 표시할 색 — 위젯 버튼과 트레이 바로가기 아이콘이 같은 색을 쓴다.
 TRAY_ON_COLOR := 0x0A84FF
-; ClassZoom 위젯: 아이콘은 늘 원래 색으로 두고, 켜짐은 버튼 바탕을 하늘색으로 바꿔 보여준다
+; ClassZoom 위젯: 아이콘은 늘 원래 색으로 두고, 켜짐은 버튼 바탕을 노랑으로 바꿔 보여준다 (위젯 기본색은 진한 파랑)
 ICON_KEEP_COLOR := -1
 CHIP_OFF_FILL := 0xFFFFFF
-CHIP_ON_FILL := 0xBFDBFE
+CHIP_ON_FILL := 0xFDE047 ; 켜짐: 노랑 (파란 위젯 위에서 흰 버튼과 확실히 구분된다)
 CHIP_REC_FILL := 0xFECACA ; 녹화 중
 
 RenderButtonBitmap(fillColor, bgColor, size, corner, iconPath, iconSize, iconColor) {
@@ -4954,7 +4965,7 @@ BuildWidget() {
     hBtnRecOff := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_REC_PATH, icon, ICON_KEEP_COLOR)
     hBtnRecOn := RenderButtonBitmap(CHIP_REC_FILL, widgetBgColor, chip, corner, ICON_REC_PATH, icon, ICON_KEEP_COLOR)
 
-    widget := Gui("+AlwaysOnTop -Caption +ToolWindow", "ClassZoom")
+    widget := Gui((WidgetWantsTop() ? "+AlwaysOnTop " : "") "-Caption +ToolWindow", "ClassZoom")
     widget.BackColor := HexColor(widgetBgColor)
     ; 배경이 어두우면 ⋮와 ✕가 묻히므로 글자색을 뒤집는다 (밝기 기준은 사람 눈의 민감도 가중치)
     widget.SetFont("s" Max(6, WidgetPx(10)) " c" (WidgetIsDark() ? "E6E6E6" : "000000"), "Malgun Gothic")
@@ -5175,9 +5186,41 @@ RaiseWidget() {
     global widget
     if (!IsSet(widget) || !widget)
         return
-    try DllCall("SetWindowPos", "ptr", widget.Hwnd, "ptr", -1
+    ; "항상 위"를 끈 경우: 보통 창들 맨 앞까지만 올린다 (-2 = HWND_NOTOPMOST, 항상 위 무리에서 빼낸다)
+    try DllCall("SetWindowPos", "ptr", widget.Hwnd, "ptr", WidgetWantsTop() ? -1 : -2
         , "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x1 | 0x2 | 0x10)
 }
+
+; 위젯을 "항상 위"로 둘지. 설정에서 껐더라도 드로잉·라이브 줌·녹화 중에는 화면을 덮는 ClassZoom 창들
+; 위에 있어야 위젯을 눌러 끌 수 있으므로 위에 둔다.
+WidgetWantsTop() {
+    global widgetOnTop, drawOn, zoomOn, recState
+    return widgetOnTop || (IsSet(drawOn) && drawOn) || (IsSet(zoomOn) && zoomOn) || (IsSet(recState) && recState != "")
+}
+
+; 설정 창의 "항상 다른 창 위에 표시" 체크박스
+SetWidgetOnTop(on) {
+    global widgetOnTop, widget
+    widgetOnTop := on ? true : false
+    if (IsSet(widget) && widget)
+        try WinSetAlwaysOnTop(WidgetWantsTop(), widget)
+    RaiseWidget()
+}
+
+; 다른 프로그램이 앞으로 나오면(전체 화면 슬라이드, 다른 "항상 위" 창 등) 위젯을 다시 맨 앞으로 올린다.
+; 드로잉·라이브 줌·녹화 중에는 그쪽이 창 순서를 직접 맞추므로 건드리지 않는다.
+OnForegroundChanged(hook, event, hwnd, idObject, idChild, thread, time) {
+    SetTimer(RaiseWidgetIfIdle, -200) ; 훅 안에서는 일을 하지 않고 조금 뒤로 미룬다
+}
+RaiseWidgetIfIdle() {
+    global widgetOnTop, showWidget, drawOn, zoomOn, recState, widgetDragging
+    if (!widgetOnTop || !showWidget || drawOn || zoomOn || recState != "" || (IsSet(widgetDragging) && widgetDragging))
+        return
+    RaiseWidget()
+}
+; EVENT_SYSTEM_FOREGROUND(3)만 받는다. WINEVENT_OUTOFCONTEXT(0)라 다른 프로그램에 끼어들지 않는다.
+DllCall("SetWinEventHook", "uint", 3, "uint", 3, "ptr", 0, "ptr", CallbackCreate(OnForegroundChanged, "F", 7)
+    , "uint", 0, "uint", 0, "uint", 0, "ptr")
 
 ; 판서 오버레이를 클릭해도 그 창이 앞으로 올라오지 않게 한다.
 ; WS_EX_NOACTIVATE는 "활성화"만 막을 뿐, 클릭했을 때 창을 앞으로 끌어올리는 것까지는 막지
@@ -5269,6 +5312,9 @@ UpdateWidgetState() {
     btnZoomOn.Visible := zoomOn
     btnRecOff.Visible := (recState = "")
     btnRecOn.Visible := (recState != "")
+    ; "항상 위"를 끈 경우, 드로잉·줌·녹화가 모두 끝나면 위젯을 보통 창으로 되돌린다
+    if !WidgetWantsTop()
+        try WinSetAlwaysOnTop(false, widget)
 
     if showTrayIcons {
         SetQuickTrayIcon(1, spotlightOn ? hIconSpotOn : hIconSpotOff)

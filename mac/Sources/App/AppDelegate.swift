@@ -28,7 +28,7 @@ import Combine
         var tray: Bool
         init(_ s: Settings) {
             spot = [s.spotSize, s.spotOpacity, Double(s.spotColor)]
-            widget = [s.widgetScale, s.widgetOpacity, Double(s.widgetColor)]
+            widget = [s.widgetScale, s.widgetOpacity, Double(s.widgetColor), s.widgetOnTop ? 1 : 0]
             draw = DrawConfig(s)
             tray = s.showTrayIcons
         }
