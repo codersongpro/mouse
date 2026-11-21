@@ -124,7 +124,7 @@ enum SettingsSchema {
     static let positionKeys: [(section: String, key: String)] = [("Common", "WidgetX"), ("Common", "WidgetY")]
 
     // Windows 판만 쓰는 키: 맥은 읽지도 지우지도 않는다(IniFile이 그대로 보존한다)
-    static let windowsOnly: Set<String> = ["Highlight.HideCursor", "Record.Mode", "Record.Folder", "Common.ShowGuide"]
+    static let windowsOnly: Set<String> = ["Highlight.HideCursor", "Record.Mode", "Record.Folder", "Common.ShowGuide", "Common.BoardMode", "Common.BoardModeAsked"] // 전자칠판 모드는 Windows 먼저
     // ahk가 예전 파일을 읽으려고 받아 주는 옛 키
     static let windowsLegacy: Set<String> = ["Common.Color", "Draw.Thickness", "Draw.EraserSize"]
 

@@ -124,8 +124,8 @@ final class Settings: ObservableObject {
         }
         // 항목표(SettingsSchema)대로 읽는다: 못 읽는 값은 기본값, 범위 밖 숫자는 끝값
         for k in SettingsSchema.keys { k.write(self, k.parse(ini.value(k.section, k.key)) ?? k.defaultValue) }
-        // 예전 기본색(연회색)을 그대로 쓰던 경우만 새 기본색(진한 파랑)으로. 일부러 고른 색은 그대로 둔다
-        if widgetColor == WIDGET_OLD_DEFAULT_COLOR { widgetColor = WIDGET_DEFAULT_COLOR }
+        // 예전 기본색(연회색·진한 파랑)을 그대로 쓰던 경우만 새 기본색(연노랑)으로. 일부러 고른 색은 그대로 둔다
+        if WIDGET_OLD_DEFAULT_COLORS.contains(widgetColor) { widgetColor = WIDGET_DEFAULT_COLOR }
         widgetX = ini.value("Common", "WidgetX").flatMap(Double.init).flatMap { $0.isFinite ? $0 : nil }
         widgetY = ini.value("Common", "WidgetY").flatMap(Double.init).flatMap { $0.isFinite ? $0 : nil }
         // 단축키: 알아볼 수 없거나 ⌃·⌥ 없이 위험한 조합이면 기본값으로 (단축키가 하나도 안 먹는 채로 시작하지 않게)
