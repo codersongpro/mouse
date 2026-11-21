@@ -67,6 +67,7 @@ enum SettingsLayout {
     static let recSys = "Record.System"
     static let widgetShow = "Common.ShowWidget"
     static let trayShow = "Common.ShowTrayIcons"
+    static let widgetOnTop = "Common.WidgetOnTop"
 
     // 칸이 있는 모든 키 (자체 점검: 표의 키와 같아야 한다)
     static var allIDs: Set<String> {
@@ -74,7 +75,7 @@ enum SettingsLayout {
         for g in focus { ids.formUnion(g.fields.map(\.id)); if let t = g.toggle { ids.insert(t) } }
         ids.formUnion(draw.fields.map(\.id))
         for r in drawKeys { ids.insert(r.color); ids.insert(r.opacity); if let s = r.step { ids.insert(s) } }
-        ids.formUnion(widget.fields.map(\.id)); ids.insert(widgetShow); ids.insert(trayShow)
+        ids.formUnion(widget.fields.map(\.id)); ids.insert(widgetShow); ids.insert(trayShow); ids.insert(widgetOnTop)
         ids.formUnion(zoom.fields.map(\.id)); ids.insert(zoomSmooth)
         ids.formUnion(record.fields.map(\.id)); ids.insert(recMic); ids.insert(recSys); ids.insert("Record.Quality"); ids.insert("Record.AskQuality"); ids.insert("Draw.RightOptionHold")
         return ids
@@ -592,6 +593,10 @@ struct SettingsView: View {
             Card(title: "위젯 표시", toggle: flagBinding(SettingsLayout.widgetShow)) {
                 ForEach(SettingsLayout.widget.fields, id: \.id) { FieldView(f: $0) }
                 Button("처음 자리로 되돌리기", action: onResetWidget)
+            }
+            Card(title: "항상 다른 창 위에 표시", toggle: flagBinding(SettingsLayout.widgetOnTop)) {
+                Text("끄면 위젯이 다른 창 뒤로 갈 수 있습니다. 드로잉·라이브 줌·녹화 중에는 끄기 쉽도록 계속 위에 보입니다.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Card(title: "메뉴 막대 아이콘을 위젯처럼 표시", toggle: flagBinding(SettingsLayout.trayShow)) {
                 Text("켜면 메뉴 막대에 위젯처럼 강조 · 드로잉 · 설정이 테두리로 묶여 보입니다. 강조·드로잉은 누를 때마다 켜고 끄고(켜진 것은 파랑), 설정을 누르면 메뉴가 열립니다.")
