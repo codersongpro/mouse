@@ -59,18 +59,23 @@ CapRun(mode) {
             return
         cap.gui.Hide()
     }
-    if (mode = "window")
-        rect := CapPickWindow()
-    else if (mode = "area")
-        rect := CapPickArea()
-    else
-        rect := RecMonitorRect() ; 커서가 있는 모니터 (확대 중이면 확대 화면 그대로)
+    ; 고르기·찍기는 "모니터마다 DPI 인식" 상태로 한다 (아래 CapDpiBegin 설명). 편집 창은 원래 상태로 띄운다.
+    oldDpi := CapDpiBegin()
+    try {
+        if (mode = "window")
+            rect := CapPickWindow()
+        else if (mode = "area")
+            rect := CapPickArea()
+        else
+            rect := RecMonitorRect() ; 커서가 있는 모니터 (확대 중이면 확대 화면 그대로)
+        pBmp := IsObject(rect) ? CapGrab(rect) : 0
+    } finally
+        CapDpiEnd(oldDpi)
     if !IsObject(rect) {
         if (hadEditor && IsObject(cap))
             cap.gui.Show()
         return
     }
-    pBmp := CapGrab(rect)
     if !pBmp {
         MsgBox("화면을 캡처하지 못했습니다.", "ClassZoom — 캡처", "Icon!")
         if (hadEditor && IsObject(cap))
@@ -81,6 +86,26 @@ CapRun(mode) {
     if IsObject(cap)
         CapCloseEditor(true)
     CapOpenEditor(pBmp)
+}
+
+; ---------------- 화질: 실제 화면 픽셀 그대로 찍기 ----------------
+; ClassZoom(AutoHotkey)은 "시스템 DPI 인식" 프로그램이다. 로그인한 뒤 디스플레이 배율(125%·150%)을 바꿨거나
+; 모니터마다 배율이 다르면, Windows가 이런 프로그램에는 화면을 **줄인 좌표·줄인 그림**으로 보여 주고 다시 늘린다.
+; 그 상태로 찍으면 글자가 뿌옇게 번진다(2026-11-25 제보: 캡처 화질 저하). 찍는 동안만 이 스레드를
+; "모니터마다 DPI 인식 v2"로 바꿔 좌표·창 크기·화면 그림을 모두 실제 픽셀로 받는다. (Windows 10 1607 이상)
+CapDpiBegin() {
+    try return DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr") ; DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+    return 0
+}
+CapDpiEnd(old) {
+    if old
+        try DllCall("SetThreadDpiAwarenessContext", "ptr", old, "ptr")
+}
+
+; 가상 화면(모든 모니터) — 지금 스레드의 DPI 상태 기준으로 다시 읽는다 (시작할 때 읽어 둔 vx 등은 시스템 DPI 기준)
+CapVirtualScreen(&x, &y, &w, &h) {
+    x := DllCall("GetSystemMetrics", "int", 76), y := DllCall("GetSystemMetrics", "int", 77)
+    w := DllCall("GetSystemMetrics", "int", 78), h := DllCall("GetSystemMetrics", "int", 79)
 }
 
 ; ---------------- 고르는 동안의 키·클릭 ----------------
@@ -231,7 +256,8 @@ CapRawRect(h, &l, &t, &r, &b) {
 
 ; 찍을 범위. 바탕화면이면 모니터 전체. 확대 중이면 확대 화면에서 그 창이 보이는 자리로 옮긴다.
 CapWindowRect(h) {
-    global vx, vy, vw, vh, zoomVisible, zoomML, zoomMT, zoomMW, zoomMH
+    global zoomVisible, zoomML, zoomMT, zoomMW, zoomMH
+    CapVirtualScreen(&vx, &vy, &vw, &vh)
     cls := ""
     try cls := WinGetClass(h)
     if (cls = "Progman" || cls = "WorkerW")
@@ -250,7 +276,8 @@ CapWindowRect(h) {
 ; ---------------- 구역 고르기 ----------------
 ; 화면을 살짝 어둡게 덮고 끌어서 고른다 (녹화 영역 고르기와 같은 방식). 확대 중이면 보이는 자리 기준.
 CapPickArea() {
-    global capDim, vx, vy, vw, vh
+    global capDim
+    CapVirtualScreen(&vx, &vy, &vw, &vh)
     rect := ""
     CapPickBegin()
     try {
@@ -437,10 +464,17 @@ CapToClipboard(pBmp) {
     DllCall("GlobalUnlock", "ptr", hMem)
     DllCall("DeleteObject", "ptr", hbm)
     ok := false
+    ; PNG도 함께 넣는다. 오피스·한글·브라우저·포토샵은 PNG를 먼저 집어 가서 색·글자가 그대로 붙는다
+    ; (32비트 DIB만 있으면 일부 프로그램이 다시 변환하면서 흐려지거나 배경이 검게 붙는다)
+    hPng := CapPngHGlobal(pBmp)
+    ok := false
     loop 20 { ; 다른 프로그램이 클립보드를 잠깐 쥐고 있을 수 있다
         if DllCall("OpenClipboard", "ptr", A_ScriptHwnd) {
             DllCall("EmptyClipboard")
             ok := DllCall("SetClipboardData", "uint", 8, "ptr", hMem, "ptr") != 0 ; CF_DIB
+            if (hPng && !DllCall("SetClipboardData", "uint", DllCall("RegisterClipboardFormat", "str", "PNG", "uint"), "ptr", hPng, "ptr"))
+                DllCall("GlobalFree", "ptr", hPng)
+            hPng := 0
             DllCall("CloseClipboard")
             break
         }
@@ -448,7 +482,22 @@ CapToClipboard(pBmp) {
     }
     if !ok
         DllCall("GlobalFree", "ptr", hMem)
+    if hPng
+        DllCall("GlobalFree", "ptr", hPng)
     return ok
+}
+
+; 그림을 PNG 파일 내용 그대로 메모리(HGLOBAL)에 담는다 (클립보드 "PNG" 형식). 실패하면 0
+CapPngHGlobal(pBmp) {
+    pStream := 0, hMem := 0
+    if DllCall("ole32\CreateStreamOnHGlobal", "ptr", 0, "int", false, "ptr*", &pStream) != 0
+        return 0
+    clsid := Buffer(16, 0)
+    DllCall("ole32\CLSIDFromString", "wstr", "{557CF406-1A04-11D3-9A73-0000F81EF32E}", "ptr", clsid)
+    if (DllCall("gdiplus\GdipSaveImageToStream", "ptr", pBmp, "ptr", pStream, "ptr", clsid, "ptr", 0) = 0)
+        DllCall("ole32\GetHGlobalFromStream", "ptr", pStream, "ptr*", &hMem)
+    ObjRelease(pStream) ; fDeleteOnRelease = false 라서 메모리는 남는다
+    return hMem
 }
 
 ; 저장 폴더: 사진\ClassZoom
