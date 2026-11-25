@@ -11,7 +11,7 @@
 ; 키 겹침을 막은 자리 (2026-11-25 점검)
 ;   - 캡처 키는 녹화 키처럼 앞 프로그램에 넘기지 않는다(HOTKEY_NO_PASS). 넘기면 한글 F6(스타일) 창이 떠서 함께 찍힌다.
 ;   - 고르는 동안 Esc는 "취소"로만 쓴다(CapPicking 조건의 Esc). 라이브 줌의 Esc(확대 끄기)보다 먼저 만들어서 이쪽이 이긴다.
-;   - 고르는 동안 클릭은 ClassZoom이 받는다(뒤 프로그램의 링크·버튼이 눌리지 않게). 오류가 나도 finally에서 반드시 푼다.
+;   - 고르는 동안 클릭은 화면을 덮는 투명한 덮개 창이 받는다(뒤 프로그램의 링크·버튼이 눌리지 않게). 오류가 나도 finally에서 치운다.
 ;   - 드로잉 중이면 고르는 동안 드로잉 입력을 멈추고(클릭이 선으로 그려지지 않게) 그린 그림은 캡처에 그대로 넣는다.
 ;   - 편집 창의 Ctrl+C·S·Z는 편집 창이 앞에 있고 드로잉이 꺼져 있을 때만 (Caps Lock 드로잉의 Ctrl+Z와 겹치지 않게).
 ;   - 확대 중에도 캡처한다: 확대 화면에 보이는 그대로 찍는다. 편집 창이 열리면 확대를 잠시 끄고(확대 위에서는 누르는
@@ -29,7 +29,7 @@ CAP_FRAME_PX := 3               ; 창 고르기 테두리 두께
 capBusy := false                ; 고르기·찍기 중 (단축키를 연달아 눌러도 한 번만)
 capPicking := false             ; 창·구역을 고르는 중 (Esc = 취소)
 capCancel := false
-capHint := "", capDim := "", capFrames := []
+capHint := "", capDim := "", capFrames := [], capCatch := ""
 cap := ""                       ; 편집 창 상태 (열려 있지 않으면 "")
 capZoomResume := 0              ; 편집 창을 닫으면 다시 켤 확대 단계 (0 = 없음)
 
@@ -113,8 +113,6 @@ CapPickingNow(*) {
     global capPicking
     return capPicking
 }
-CapSwallow(*) {
-}
 CapEscCancel(*) {
     global capCancel
     capCancel := true
@@ -123,9 +121,12 @@ HotIf(CapPickingNow)
 Hotkey("Esc", CapEscCancel, "On") ; 라이브 줌 Esc(실행 중 처음 확대할 때 만든다)보다 먼저 만들어 이쪽이 이긴다
 HotIf()
 
-; 고르기 시작: 클릭을 삼키고, 드로잉 입력을 잠시 멈춘다
+; 고르기 시작: 화면 전체에 거의 투명한 덮개 창을 깔아 클릭·끌기를 받는다.
+; 예전에는 마우스 버튼을 단축키로 삼켜(*LButton) 막았는데, 그 방식에서는 누른 채 끌어 구역을 고르는 것이
+; 동작하지 않았다(2026-11-25 제보). 녹화 영역 고르기와 같은 덮개 방식이면 클릭이 뒤 프로그램·드로잉 판으로
+; 가지 않으면서 끌기도 그대로 받는다. 덮개는 ClassZoom 창이라 CapWindowAt이 건너뛰고, 캡처에는 찍히지 않는다.
 CapPickBegin() {
-    global capPicking, capCancel, drawOn, drawGui
+    global capPicking, capCancel, drawOn, drawGui, capCatch
     KeyWait("LButton"), KeyWait("RButton") ; 위젯 버튼을 누른 손을 뗀 뒤부터
     capCancel := false
     capPicking := true
@@ -133,20 +134,24 @@ CapPickBegin() {
         SetTimer(DrawPoll, 0)
         try WinSetExStyle("+0x20", drawGui) ; 터치·펜 입력도 판서 층으로 가지 않게
     }
-    HotIf()
-    for k in ["*LButton", "*LButton up", "*RButton", "*RButton up"]
-        Hotkey(k, CapSwallow, "On")
+    CapVirtualScreen(&x, &y, &w, &h)
+    capCatch := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x08000000", "ClassZoom-CapCatch")
+    capCatch.BackColor := "000000"
+    capCatch.Show("NA x" x " y" y " w" w " h" h)
+    WinSetTransparent(1, capCatch) ; 눈에는 안 보이지만(1/255) 클릭은 받는다
+    RecExclude(capCatch.Hwnd)
+    ZoomKeepOrder(true)
 }
 
 CapPickEnd() {
-    global capPicking, drawOn, drawGui, inkPinned
-    ; 오른쪽 버튼으로 취소했으면 뗀 뒤에 풀어야 뗀 것이 뒤 프로그램에 가지 않는다
+    global capPicking, drawOn, drawGui, inkPinned, capCatch
+    ; 버튼을 뗀 뒤에 덮개를 치워야 뗀 것이 뒤 프로그램에 가지 않는다
     t0 := A_TickCount
     while ((GetKeyState("LButton", "P") || GetKeyState("RButton", "P")) && A_TickCount - t0 < 3000)
         Sleep(10)
-    HotIf()
-    for k in ["*LButton", "*LButton up", "*RButton", "*RButton up"]
-        try Hotkey(k, "Off")
+    if IsObject(capCatch)
+        try capCatch.Destroy()
+    capCatch := ""
     capPicking := false
     if drawOn {
         if !inkPinned
@@ -375,9 +380,9 @@ CapHideFrame() {
 
 ; 확대 중에도 확대 화면 위(확대하지 않고)에 보여야 하는 캡처 창들 (zoom.ahk ZoomTopHwnds가 부른다)
 CapTopHwnds() {
-    global capHint, capDim, capFrames
+    global capHint, capDim, capFrames, capCatch
     list := []
-    for g in [capDim, capHint]
+    for g in [capCatch, capDim, capHint]
         if IsObject(g)
             try list.Push(g.Hwnd)
     for g in capFrames
