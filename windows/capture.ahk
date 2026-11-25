@@ -601,7 +601,7 @@ CapOpenEditor(pBmp) {
 
 CapEditorActive(*) {
     global cap, drawOn
-    return IsObject(cap) && !drawOn && WinActive("ahk_id " cap.gui.Hwnd)
+    return IsObject(cap) && cap.HasOwnProp("gui") && !drawOn && WinActive("ahk_id " cap.gui.Hwnd)
 }
 HotIf(CapEditorActive)
 Hotkey("^c", (*) => CapCopy(), "On")
@@ -612,7 +612,7 @@ HotIf()
 
 CapOnSize(g, minMax, *) {
     global cap
-    if (minMax = -1 || !IsObject(cap))
+    if (minMax = -1 || !IsObject(cap) || !cap.HasOwnProp("status")) ; 그림판·상태줄을 다 만들기 전에는 건너뛴다
         return
     rc := Buffer(16, 0)
     DllCall("GetClientRect", "ptr", g.Hwnd, "ptr", rc)
@@ -626,6 +626,8 @@ CapOnSize(g, minMax, *) {
 ; 그림판 크기에 맞춰 보이는 배율·자리를 다시 정한다
 CapLayout() {
     global cap
+    if !CapCanvasHwnd()
+        return
     rc := Buffer(16, 0)
     DllCall("GetClientRect", "ptr", cap.canvas.Hwnd, "ptr", rc)
     cw := NumGet(rc, 8, "Int"), ch := NumGet(rc, 12, "Int")
@@ -868,6 +870,13 @@ CapWidth(t) {
 }
 
 ; ---------------- 마우스 ----------------
+; 편집 창의 그림판 핸들. 편집 창 상태(cap)는 그림판보다 먼저 만들어지므로, 그 사이에 들어온
+; 마우스 메시지가 없는 그림판을 찾다 멈추지 않게 한다(2026-11-25 제보: "no property named canvas").
+CapCanvasHwnd() {
+    global cap
+    return (IsObject(cap) && cap.HasOwnProp("canvas")) ? cap.canvas.Hwnd : 0
+}
+
 CapMousePt(lParam, &ix, &iy) {
     global cap
     x := lParam & 0xFFFF, y := (lParam >> 16) & 0xFFFF
@@ -878,7 +887,7 @@ CapMousePt(lParam, &ix, &iy) {
 
 CapMouseDown(wParam, lParam, msg, hwnd) {
     global cap, CAP_COLORS, CAP_TEXT_SIZES, CAP_MOSAIC_BLOCK
-    if !(IsObject(cap) && hwnd = cap.canvas.Hwnd)
+    if !(hwnd && hwnd = CapCanvasHwnd())
         return
     if !CapMousePt(lParam, &ix, &iy)
         return 0
@@ -901,7 +910,7 @@ CapMouseDown(wParam, lParam, msg, hwnd) {
 
 CapMouseMove(wParam, lParam, msg, hwnd) {
     global cap
-    if !(IsObject(cap) && hwnd = cap.canvas.Hwnd && IsObject(cap.cur))
+    if !(hwnd && hwnd = CapCanvasHwnd() && IsObject(cap.cur))
         return
     CapMousePt(lParam, &ix, &iy)
     ix := Max(0, Min(cap.imgW, ix)), iy := Max(0, Min(cap.imgH, iy))
@@ -919,7 +928,7 @@ CapMouseMove(wParam, lParam, msg, hwnd) {
 
 CapMouseUp(wParam, lParam, msg, hwnd) {
     global cap
-    if !(IsObject(cap) && hwnd = cap.canvas.Hwnd && IsObject(cap.cur))
+    if !(hwnd && hwnd = CapCanvasHwnd() && IsObject(cap.cur))
         return
     DllCall("ReleaseCapture")
     a := cap.cur
@@ -934,7 +943,7 @@ CapMouseUp(wParam, lParam, msg, hwnd) {
 ; 그림판 위에서는 십자 커서 (글자 도구는 I자)
 CapSetCursor(wParam, lParam, msg, hwnd) {
     global cap
-    if !(IsObject(cap) && wParam = cap.canvas.Hwnd && (lParam & 0xFFFF) = 1)
+    if !(wParam && wParam = CapCanvasHwnd() && (lParam & 0xFFFF) = 1)
         return
     DllCall("SetCursor", "ptr", DllCall("LoadCursor", "ptr", 0, "ptr", cap.tool = "text" ? 32513 : 32515, "ptr"))
     return 1
