@@ -291,7 +291,7 @@ final class CaptureEditorWindow: NSWindow {
             guard let self else { return false }
             switch (k, f.contains(.shift)) {
             case ("z", false): self.canvas.undo(); return true
-            case ("c", false): self.copy(); return true
+            case ("c", false): self.copyImage(); return true
             case ("s", false): self.save(); return true
             case ("s", true): self.saveAs(); return true
             default: return false
@@ -386,7 +386,7 @@ final class CaptureEditorWindow: NSWindow {
     }
     @objc private func sizeChanged() { canvas.sizeIndex = max(0, sizes.selectedSegment) }
     @objc private func undoClicked() { canvas.undo() }
-    @objc private func copyClicked() { copy() }
+    @objc private func copyClicked() { copyImage() }
     @objc private func saveClicked() { save() }
     @objc private func saveAsClicked() { saveAs() }
     @objc private func folderClicked() {
@@ -420,7 +420,7 @@ final class CaptureEditorWindow: NSWindow {
     }
 
     // ---------- 복사 · 저장 ----------
-    func copy() {
+    func copyImage() {
         if copyImageToPasteboard(canvas.composite) {
             dirty = false
             setStatus("클립보드에 복사했습니다. 붙여넣기(⌘V)로 쓰세요.")
