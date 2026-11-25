@@ -493,7 +493,7 @@ struct SettingsView: View {
                 HStack(spacing: 6) {
                     Text("\(Maker.copyright) · MIT 라이선스").foregroundStyle(.secondary)
                     Link("songpro.app", destination: UpdateCheck.authorURL)
-                    Button("이용 안내") { Notice.show(Notice.terms()) }.buttonStyle(.link)
+                    Button("이용 약관") { Notice.show(Notice.terms()) }.buttonStyle(.link)
                 }.font(.callout)
             }
         }
