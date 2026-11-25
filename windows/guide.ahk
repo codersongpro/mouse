@@ -52,7 +52,7 @@ ShowUsageGuide(*) {
     ; ---- 위젯 버튼 (F6 → F10 순서) ----
     rows := [
         [ICON_CAP_PATH, "화면 캡처", HotkeyText(hotkeyCombos["Capture"])
-            , "창을 클릭해 찍고 편집 창에서 펜·도형·글자·모자이크를 넣습니다. 찍으면 바로 클립보드에 복사됩니다.`n"
+            , "창을 클릭하거나 구역을 끌어서 찍고 편집 창에서 펜·도형·글자·모자이크를 넣습니다. 찍으면 바로 클립보드에 복사됩니다.`n"
             . "전체 화면 " HotkeyText(hotkeyCombos["CaptureScreen"]) " · 구역 지정 " HotkeyText(hotkeyCombos["CaptureArea"])
             . " · 저장 위치 사진\ClassZoom"],
         [ICON_ZOOM_DARK_PATH, "라이브 줌", HotkeyText(hotkeyCombos["Zoom"])

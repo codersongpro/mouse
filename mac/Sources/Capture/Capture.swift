@@ -2,7 +2,7 @@ import AppKit
 import ScreenCaptureKit
 
 // ================= 화면 캡처 (ClassZoom) =================
-// F6(또는 위젯의 캡처 버튼): 창 캡처 — 마우스를 올린 창에 빨간 테두리가 뜨고, 클릭하면 그 창을 찍는다
+// F6(또는 위젯의 캡처 버튼): 마우스를 올린 창에 빨간 테두리가 뜨고, 클릭하면 그 창을, 누른 채 끌면 그 구역을 찍는다
 // ⇧F6: 커서가 있는 화면 전체 / ⌃⇧F6: 마우스로 끌어 고른 구역 (Windows 판과 같은 키)
 // 찍은 그림은 곧바로 클립보드에 넣고, 편집 창(CaptureEditor)을 띄운다.
 //
@@ -123,16 +123,25 @@ import ScreenCaptureKit
     private var monitors: [Any] = []
     private var timer: Timer?
     private var current: CGRect?
+    // 클릭하면 창, 누른 채 끌면 구역 (픽픽처럼 F6 하나로 둘 다). 이만큼(pt) 움직여야 끌기로 본다
+    static let dragThreshold: CGFloat = 6
+    private var pressAt: NSPoint?      // 누른 자리 (진짜 커서)
+    private var dragStart: NSPoint?    // 끌기 시작 자리 (확대 중이면 보이는 자리)
+    private var dragRect: CGRect?
     var windowNumbers: [Int] { windows.map(\.windowNumber) + [hintWindow?.windowNumber].compactMap { $0 } }
 
     final class PickView: NSView {
         var rect: CGRect?   // 이 창 안 좌표
-        var onClick: () -> Void = {}
+        var onDown: () -> Void = {}
+        var onDrag: () -> Void = {}
+        var onUp: () -> Void = {}
         var onCancel: () -> Void = {}
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-        override func mouseDown(with e: NSEvent) { onClick() }
+        override func mouseDown(with e: NSEvent) { onDown() }
+        override func mouseDragged(with e: NSEvent) { onDrag() }
+        override func mouseUp(with e: NSEvent) { onUp() }
         override func rightMouseDown(with e: NSEvent) { onCancel() }
-        override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .crosshair) }
         override func draw(_ dirtyRect: NSRect) {
             // 완전히 투명하면 클릭이 아래 창으로 지나가므로 거의 보이지 않을 만큼만 칠한다
             NSColor(white: 0, alpha: 0.01).setFill()
@@ -158,14 +167,16 @@ import ScreenCaptureKit
             w.isReleasedWhenClosed = false
             w.sharingType = .none
             let v = PickView(frame: NSRect(origin: .zero, size: scr.frame.size))
-            v.onClick = { [weak self] in self?.finish(self?.current) }
+            v.onDown = { [weak self] in self?.pressAt = NSEvent.mouseLocation }
+            v.onDrag = { [weak self] in self?.dragged() }
+            v.onUp = { [weak self] in self?.released() }
             v.onCancel = { [weak self] in self?.finish(nil) }
             w.contentView = v
             w.setFrame(scr.frame, display: true)
             w.orderFrontRegardless()
             windows.append(w)
         }
-        hintWindow = showPickHint("캡처할 창을 클릭하세요  ·  esc 취소")
+        hintWindow = showPickHint("클릭하면 창 · 끌면 구역을 캡처합니다  ·  esc 취소")
         windows.first?.makeKey()
         let esc: (NSEvent) -> Void = { [weak self] e in if e.keyCode == 53 { self?.finish(nil) } }
         if let g = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: esc) { monitors.append(g) }
@@ -177,11 +188,40 @@ import ScreenCaptureKit
         Log.log("CAP", "pick window")
     }
 
+    private func dragged() {
+        guard let p = pressAt else { return }
+        let m = NSEvent.mouseLocation
+        if dragStart == nil {
+            guard abs(m.x - p.x) >= Self.dragThreshold || abs(m.y - p.y) >= Self.dragThreshold else { return }
+            dragStart = ZoomMap.screenPoint(p)
+        }
+        guard let a = dragStart else { return }
+        let b = ZoomMap.screenPoint(m)
+        dragRect = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
+        show(dragRect)
+    }
+
+    private func released() {
+        defer { pressAt = nil }
+        guard pressAt != nil else { return }
+        if dragStart != nil {
+            let r = dragRect
+            finish(r.flatMap { $0.width >= 8 && $0.height >= 8 ? $0 : nil })
+        } else {
+            finish(current)
+        }
+    }
+
     private func update() {
+        guard dragStart == nil else { return } // 끄는 동안은 창 테두리를 그리지 않는다
         current = WindowPicker.windowRect(at: NSEvent.mouseLocation)
+        show(current)
+    }
+
+    private func show(_ global: CGRect?) {
         for w in windows {
             guard let v = w.contentView as? PickView else { continue }
-            let local = current.map { CGRect(x: $0.minX - w.frame.minX, y: $0.minY - w.frame.minY, width: $0.width, height: $0.height) }
+            let local = global.map { CGRect(x: $0.minX - w.frame.minX, y: $0.minY - w.frame.minY, width: $0.width, height: $0.height) }
             if v.rect != local { v.rect = local; v.needsDisplay = true }
         }
     }

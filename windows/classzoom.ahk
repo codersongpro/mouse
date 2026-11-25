@@ -5791,7 +5791,7 @@ WidgetTipText(kind) {
     case "grip": return "끌어서 옮기기"
     case "spot": return "마우스 하이라이트" WidgetTipKey("Spotlight")
     case "draw": return "드로잉" WidgetTipKey("Draw")
-    case "cap": return "화면 캡처" WidgetTipKey("Capture") " · 창을 클릭해 찍기 · 오른쪽 클릭: 구역 · 전체 화면"
+    case "cap": return "화면 캡처" WidgetTipKey("Capture") " · 클릭: 창 · 끌기: 구역 · 오른쪽 클릭: 전체 화면"
     case "zoom": return "라이브 줌" WidgetTipKey("Zoom") " · 누를 때마다 1 → 2 → 3단계 → 끄기"
     case "zplus": return "확대 단계 올리기"
     case "zminus": return "확대 단계 내리기 (1단계에서 누르면 끄기)"

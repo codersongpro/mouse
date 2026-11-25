@@ -3,7 +3,7 @@
 ; ##########################################################################
 ;
 ; 무엇을 하나
-;   F6(또는 위젯의 캡처 버튼): 창 캡처 — 마우스를 올린 창에 빨간 테두리가 뜨고, 클릭하면 그 창을 찍는다
+;   F6(또는 위젯의 캡처 버튼): 마우스를 올린 창에 빨간 테두리가 뜨고, 클릭하면 그 창을, 누른 채 끌면 그 구역을 찍는다
 ;   Shift+F6: 커서가 있는 모니터 전체 / Ctrl+Shift+F6: 마우스로 끌어 고른 구역
 ;   찍은 그림은 곧바로 클립보드에 복사하고, 편집 창(펜·형광펜·네모·화살표·글자·모자이크·자르기)을 띄운다.
 ;   편집 창에서 [복사]·[저장](사진\ClassZoom 폴더에 PNG)·[다른 이름으로]를 고른다.
@@ -137,12 +137,15 @@ CapPickCancelled() {
     return capCancel || GetKeyState("Esc", "P") || GetKeyState("RButton", "P")
 }
 
-; ---------------- 창 고르기 ----------------
+; ---------------- 창 고르기 (끌면 구역) ----------------
+; 클릭하면 마우스 아래 창, 누른 채 끌면 그 구역을 찍는다 (픽픽처럼 F6 하나로 둘 다).
+CAP_DRAG_PX := 6 ; 이만큼 움직여야 "끌기"로 본다 (손떨림으로 클릭이 구역이 되지 않게)
 CapPickWindow() {
+    global CAP_DRAG_PX
     rect := ""
     CapPickBegin()
     try {
-        CapShowHint("캡처할 창을 클릭하세요   ·   Esc 취소")
+        CapShowHint("클릭하면 창 · 끌면 구역을 캡처합니다   ·   Esc 취소")
         lastKey := "-"
         loop {
             if CapPickCancelled()
@@ -156,15 +159,43 @@ CapPickWindow() {
                 IsObject(r) ? CapShowFrame(r) : CapHideFrame()
             }
             if GetKeyState("LButton", "P") {
-                while GetKeyState("LButton", "P")
+                ; 누른 자리 (확대 중이면 확대 화면에 보이는 자리)
+                MouseGetPos(&rx1, &ry1)
+                x1 := rx1, y1 := ry1
+                ZoomScreenPos(&x1, &y1)
+                x2 := x1, y2 := y1, dragging := false
+                while GetKeyState("LButton", "P") {
+                    if CapPickCancelled() {
+                        RecHideFrame()
+                        break 2
+                    }
+                    MouseGetPos(&rx2, &ry2)
+                    x2 := rx2, y2 := ry2
+                    ZoomScreenPos(&x2, &y2)
+                    if (!dragging && (Abs(rx2 - rx1) >= CAP_DRAG_PX || Abs(ry2 - ry1) >= CAP_DRAG_PX)) {
+                        dragging := true
+                        CapHideFrame() ; 창 테두리 대신 끄는 구역 테두리
+                        CapShowHint("놓으면 이 구역을 캡처합니다   ·   Esc 취소")
+                    }
+                    if dragging
+                        RecShowFrame({x: Min(x1, x2), y: Min(y1, y2), w: Abs(x2 - x1), h: Abs(y2 - y1)})
                     Sleep(10)
-                rect := r
+                }
+                if dragging {
+                    RecHideFrame()
+                    w := Abs(x2 - x1), hh := Abs(y2 - y1)
+                    if (w >= 8 && hh >= 8)
+                        rect := {x: Min(x1, x2), y: Min(y1, y2), w: w, h: hh}
+                } else
+                    rect := r
                 break
             }
             Sleep(25)
         }
-    } finally
+    } finally {
+        RecHideFrame()
         CapPickEnd()
+    }
     return rect
 }
 

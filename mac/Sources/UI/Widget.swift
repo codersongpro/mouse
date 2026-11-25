@@ -185,7 +185,7 @@ final class WidgetView: NSView {
         }
         switch part {
         case .grip: return "끌어서 옮기기"
-        case .capture: return "화면 캡처" + key("Capture") + " · 창을 클릭해 찍기 · 오른쪽 클릭: 메뉴"
+        case .capture: return "화면 캡처" + key("Capture") + " · 클릭: 창 · 끌기: 구역 · 오른쪽 클릭: 메뉴"
         case .spot: return "마우스 하이라이트" + key("Spotlight")
         case .draw: return "드로잉" + key("Draw")
         case .zoom: return "라이브 줌" + key("Zoom") + " · 누를 때마다 1 → 2 → 3단계 → 끄기"
