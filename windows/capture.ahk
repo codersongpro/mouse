@@ -450,7 +450,8 @@ CapOpenEditor(pBmp) {
     }
     dpi := A_ScreenDPI / 96
     CapImageSize(pBmp, &iw, &ih)
-    cap := {base: pBmp, comp: 0, view: 0, cache: 0, cacheOk: false, imgW: iw, imgH: ih
+    ; 주의: AutoHotkey v2에서 base는 객체의 원형을 가리키는 예약 속성이라 그림 이름으로 쓰면 오류가 난다 (orig로 쓴다)
+    cap := {orig: pBmp, comp: 0, view: 0, cache: 0, cacheOk: false, imgW: iw, imgH: ih
         , annots: [], history: [], tool: "pen", color: 1, size: 2, cur: "", dirty: false, saved: ""
         , cw: 0, ch: 0, s: 1, ox: 0, oy: 0, dpi: dpi}
     CapRebuild()
@@ -568,14 +569,14 @@ CapLayout() {
     CapRender()
 }
 
-; base + 확정한 그림들로 comp를 다시 만든다 (되돌리기·자르기 뒤)
+; orig(찍은 그림 또는 자른 그림) + 확정한 그림들로 comp를 다시 만든다 (되돌리기·자르기 뒤)
 CapRebuild() {
     global cap
     if cap.comp
         DllCall("gdiplus\GdipDisposeImage", "ptr", cap.comp)
-    CapImageSize(cap.base, &w, &h)
+    CapImageSize(cap.orig, &w, &h)
     cap.imgW := w, cap.imgH := h
-    cap.comp := CapCloneArea(cap.base, 0, 0, w, h)
+    cap.comp := CapCloneArea(cap.orig, 0, 0, w, h)
     G := CapGraphics(cap.comp)
     for a in cap.annots
         CapDrawAnnot(G, cap.comp, a)
@@ -865,8 +866,8 @@ CapCommit(a) {
         w := Min(cap.imgW - x, Round(Abs(a.x2 - a.x1))), h := Min(cap.imgH - y, Round(Abs(a.y2 - a.y1)))
         if (w < 4 || h < 4)
             return CapRender()
-        cap.history.Push({base: cap.base, annots: cap.annots}) ; 되돌리면 자르기 전 그림·그린 것으로
-        cap.base := CapCloneArea(cap.comp, x, y, w, h)
+        cap.history.Push({orig: cap.orig, annots: cap.annots}) ; 되돌리면 자르기 전 그림·그린 것으로
+        cap.orig := CapCloneArea(cap.comp, x, y, w, h)
         cap.annots := []
         CapRebuild()
         cap.dirty := true
@@ -890,8 +891,8 @@ CapUndo() {
         return
     e := cap.history.Pop()
     if IsObject(e) {
-        DllCall("gdiplus\GdipDisposeImage", "ptr", cap.base)
-        cap.base := e.base, cap.annots := e.annots
+        DllCall("gdiplus\GdipDisposeImage", "ptr", cap.orig)
+        cap.orig := e.orig, cap.annots := e.annots
     } else
         cap.annots.Pop()
     CapRebuild()
@@ -921,10 +922,10 @@ CapSave() {
         MsgBox("저장할 폴더를 만들 수 없습니다.`n" folder "`n`n[다른 이름으로…]로 다른 곳에 저장해 주세요.", "ClassZoom — 캡처", "Icon!")
         return
     }
-    base := folder "\ClassZoom_" FormatTime(, "yyyy-MM-dd_HH-mm-ss")
-    path := base ".png", n := 2
+    stem := folder "\ClassZoom_" FormatTime(, "yyyy-MM-dd_HH-mm-ss")
+    path := stem ".png", n := 2
     while FileExist(path)
-        path := base "_" n++ ".png"
+        path := stem "_" n++ ".png"
     CapSaveTo(path)
 }
 
@@ -984,12 +985,12 @@ CapCloseEditor(force := false) {
     old := SendMessage(0x172, 0, 0, cap.canvas)
     if old
         DllCall("DeleteObject", "ptr", old)
-    for k in ["base", "comp", "view", "cache"]
+    for k in ["orig", "comp", "view", "cache"]
         if cap.%k%
             DllCall("gdiplus\GdipDisposeImage", "ptr", cap.%k%)
     for e in cap.history
         if IsObject(e)
-            DllCall("gdiplus\GdipDisposeImage", "ptr", e.base)
+            DllCall("gdiplus\GdipDisposeImage", "ptr", e.orig)
     g := cap.gui
     cap := ""
     try g.Destroy()
