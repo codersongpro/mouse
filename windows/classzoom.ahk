@@ -5856,8 +5856,37 @@ WidgetTipPoll() {
     }
     if (!widgetTipShown && A_TickCount - widgetTipSince >= 400) {
         CoordMode("ToolTip", "Screen")
-        ToolTip(WidgetTipText(found[2]), px + 16, py + 20, 19)
+        tip := ToolTip(WidgetTipText(found[2]), px + 16, py + 20, 19)
+        PlaceWidgetTip(tip, found[1])
         widgetTipShown := true
+    }
+}
+
+; 설명을 버튼 **위쪽**에 띄운다. 커서 아래에 두면 커서에 가려 안 보였다(2026-11-25 제보).
+; 위에 자리가 없으면(위젯을 화면 맨 위에 둔 경우) 아래로. 세로 위젯(전자칠판 모드)은 버튼 왼쪽, 자리가 없으면 오른쪽.
+PlaceWidgetTip(tip, ctrl) {
+    global boardMode
+    if !tip
+        return
+    try {
+        rc := Buffer(16, 0)
+        DllCall("GetWindowRect", "ptr", ctrl.Hwnd, "ptr", rc)
+        l := NumGet(rc, 0, "Int"), t := NumGet(rc, 4, "Int"), r := NumGet(rc, 8, "Int"), b := NumGet(rc, 12, "Int")
+        WinGetPos(, , &tw, &th, "ahk_id " tip)
+        if !GetMonitorAt((l + r) // 2, (t + b) // 2, &ml, &mt, &mr, &mb, &wl, &wt, &wr, &wb)
+            ml := 0, mt := 0, mr := A_ScreenWidth, mb := A_ScreenHeight
+        gap := 8
+        if boardMode {
+            x := l - tw - gap, y := t + (b - t - th) // 2
+            if (x < ml)
+                x := r + gap
+        } else {
+            x := l + (r - l - tw) // 2, y := t - th - gap
+            if (y < mt)
+                y := b + gap
+        }
+        x := Max(ml, Min(mr - tw, x)), y := Max(mt, Min(mb - th, y))
+        WinMove(x, y, , , "ahk_id " tip)
     }
 }
 

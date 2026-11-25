@@ -195,21 +195,76 @@ final class WidgetView: NSView {
         }
     }
     func tip(at point: NSPoint) -> String { part(at: point).map(WidgetView.tipText) ?? "" }
-    private lazy var tipOwner = WidgetTipOwner(view: self) // addToolTip은 주인을 붙들지 않으므로 여기서 붙든다
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
-        removeAllToolTips()
-        for p in WidgetView.allParts { addToolTip(rect(p), owner: tipOwner, userData: nil) }
+        removeAllToolTips() // 시스템 툴팁은 커서 아래에 떠서 커서에 가린다 → 버튼 위쪽에 직접 띄운다 (showTip)
         trackingAreas.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(rect: bounds, options: [.activeAlways, .mouseMoved, .mouseEnteredAndExited, .inVisibleRect],
                                        owner: self, userInfo: nil))
     }
     // 드로잉 중에도 위젯 위에서는 평소 화살표가 보여야 어디를 누르는지 안다
     override func mouseEntered(with event: NSEvent) { NSCursor.arrow.set() }
-    override func mouseMoved(with event: NSEvent) { NSCursor.arrow.set() }
+    override func mouseMoved(with event: NSEvent) {
+        NSCursor.arrow.set()
+        updateTip(convert(event.locationInWindow, from: nil))
+    }
+    override func mouseExited(with event: NSEvent) { updateTip(nil) }
+
+    // ---------- 마우스를 올리면 뜨는 설명: 버튼 위쪽 (위에 자리가 없으면 아래) ----------
+    // 시스템 툴팁은 커서 바로 아래에 떠서 커서에 가려 안 보였다(2026-11-25 제보, Windows 판과 같이 고침).
+    private var tipPart: Part?
+    private var tipTimer: Timer?
+    private var tipWindow: NSPanel?
+
+    private func updateTip(_ p: NSPoint?) {
+        let now = p.flatMap { part(at: $0) }
+        guard now != tipPart else { return }
+        tipPart = now
+        tipTimer?.invalidate(); tipTimer = nil
+        tipWindow?.orderOut(nil)
+        guard let now else { return }
+        let t = Timer(timeInterval: 0.4, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.showTip(now) } }
+        RunLoop.main.add(t, forMode: .common)
+        tipTimer = t
+    }
+
+    private func showTip(_ part: Part) {
+        guard let win = window, tipPart == part else { return }
+        let label = NSTextField(labelWithString: WidgetView.tipText(part))
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = .white
+        label.sizeToFit()
+        let size = NSSize(width: label.frame.width + 16, height: label.frame.height + 8)
+        let panel = tipWindow ?? {
+            let w = GlassPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            w.isOpaque = false; w.backgroundColor = .clear; w.hasShadow = true
+            w.ignoresMouseEvents = true
+            w.collectionBehavior = EVERYWHERE
+            w.isReleasedWhenClosed = false
+            return w
+        }()
+        tipWindow = panel
+        panel.level = NSWindow.Level(rawValue: win.level.rawValue + 1)
+        let bg = NSView(frame: NSRect(origin: .zero, size: size))
+        bg.wantsLayer = true
+        bg.layer?.backgroundColor = NSColor(calibratedRed: 0x1E / 255, green: 0x29 / 255, blue: 0x3B / 255, alpha: 0.95).cgColor
+        bg.layer?.cornerRadius = 6
+        label.setFrameOrigin(NSPoint(x: 8, y: 4))
+        bg.addSubview(label)
+        panel.contentView = bg
+        let r = win.convertToScreen(convert(rect(part), to: nil))
+        var o = NSPoint(x: r.midX - size.width / 2, y: r.maxY + 8)
+        if let vf = (win.screen ?? NSScreen.main)?.visibleFrame {
+            if o.y + size.height > vf.maxY { o.y = r.minY - 8 - size.height } // 위에 자리가 없으면 아래
+            o.x = max(vf.minX, min(vf.maxX - size.width, o.x))
+        }
+        panel.setFrame(NSRect(origin: o, size: size), display: true)
+        panel.orderFrontRegardless()
+    }
 
     override func mouseDown(with event: NSEvent) {
+        updateTip(nil)
         if event.modifierFlags.contains(.control) { rightMouseDown(with: event); return }
         let p = convert(event.locationInWindow, from: nil)
         let hit = part(at: p)
