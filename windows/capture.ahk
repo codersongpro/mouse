@@ -536,7 +536,7 @@ CapOpenEditor(pBmp) {
         , cw: 0, ch: 0, s: 1, ox: 0, oy: 0, dpi: dpi}
     CapRebuild()
 
-    g := Gui("+Resize +MinSize840x420", "ClassZoom 캡처 편집")
+    g := Gui("+Resize +MinSize840x420 +0x2000000", "ClassZoom 캡처 편집") ; 0x2000000 = WS_CLIPCHILDREN (창이 그림판 위를 덧칠하지 않게 — 깜빡임 방지)
     cap.gui := g
     g.BackColor := "F1F5F9"
     g.SetFont("s10 c1E293B", "Malgun Gothic")
@@ -635,11 +635,23 @@ CapLayout() {
         for k in ["view", "cache"]
             if cap.%k%
                 DllCall("gdiplus\GdipDisposeImage", "ptr", cap.%k%)
-        for k in ["view", "cache"] {
-            p := 0
-            DllCall("gdiplus\GdipCreateBitmapFromScan0", "int", cw, "int", ch, "int", 0, "int", 0x26200A, "ptr", 0, "ptr*", &p)
-            cap.%k% := p
-        }
+        ; 화면에 보이는 그림(view)은 그림판(static)에 **한 번만** 붙여 둔 24비트 DIB의 메모리에 바로 그린다.
+        ; 예전처럼 그릴 때마다 새 비트맵을 STM_SETIMAGE로 바꿔 끼우면 그때마다 바탕을 지웠다 다시 그려서
+        ; 끌 때 깜빡였다(2026-11-25 제보). 24비트(알파 없음)라야 static이 복사본을 만들지 않고 이 메모리를 그대로 쓴다.
+        stride := (cw * 3 + 3) & ~3
+        bi := Buffer(40, 0)
+        NumPut("UInt", 40, "Int", cw, "Int", -ch, "UShort", 1, "UShort", 24, bi) ; 위에서 아래로 (GDI+와 같은 순서)
+        bits := 0
+        hbm := DllCall("CreateDIBSection", "ptr", 0, "ptr", bi, "uint", 0, "ptr*", &bits, "ptr", 0, "uint", 0, "ptr")
+        p := 0
+        DllCall("gdiplus\GdipCreateBitmapFromScan0", "int", cw, "int", ch, "int", stride, "int", 0x21808, "ptr", bits, "ptr*", &p) ; 24bppRGB
+        cap.view := p
+        old := SendMessage(0x172, 0, hbm, cap.canvas) ; STM_SETIMAGE
+        if (old && old != hbm)
+            DllCall("DeleteObject", "ptr", old)
+        p := 0
+        DllCall("gdiplus\GdipCreateBitmapFromScan0", "int", cw, "int", ch, "int", 0, "int", 0x26200A, "ptr", 0, "ptr*", &p)
+        cap.cache := p
         cap.cw := cw, cap.ch := ch
     }
     cap.s := Min(1, (cw - 16) / cap.imgW, (ch - 16) / cap.imgH)
@@ -709,14 +721,9 @@ CapRender() {
         }
     }
     DllCall("gdiplus\GdipDeleteGraphics", "ptr", G)
-    ; 그림판에 넘긴다. 알파가 있는 비트맵은 static이 복사본을 만들므로 돌려받은 것·남은 것을 모두 지운다
-    hbm := 0
-    DllCall("gdiplus\GdipCreateHBITMAPFromBitmap", "ptr", cap.view, "ptr*", &hbm, "uint", 0xFFE2E8F0)
-    old := SendMessage(0x172, 0, hbm, cap.canvas) ; STM_SETIMAGE
-    if old
-        DllCall("DeleteObject", "ptr", old)
-    if (SendMessage(0x173, 0, 0, cap.canvas) != hbm) ; STM_GETIMAGE
-        DllCall("DeleteObject", "ptr", hbm)
+    ; view는 그림판에 붙은 DIB의 메모리 그 자체라 새로 넘길 것이 없다. 바탕을 지우지 않고(RDW_ERASE 없음) 바로 다시 칠한다
+    DllCall("GdiFlush")
+    DllCall("RedrawWindow", "ptr", cap.canvas.Hwnd, "ptr", 0, "ptr", 0, "uint", 0x1 | 0x100) ; RDW_INVALIDATE | RDW_UPDATENOW
 }
 
 ; 그림 하나를 그린다 (좌표는 그림 픽셀 기준). pTarget은 모자이크가 읽을 그림 (미리보기에서는 0)
@@ -1062,12 +1069,12 @@ CapCloseEditor(force := false) {
                 return true
         }
     }
+    for k in ["orig", "comp", "view", "cache"] ; view가 DIB 메모리를 가리키므로 DIB보다 먼저 치운다
+        if cap.%k%
+            DllCall("gdiplus\GdipDisposeImage", "ptr", cap.%k%)
     old := SendMessage(0x172, 0, 0, cap.canvas)
     if old
         DllCall("DeleteObject", "ptr", old)
-    for k in ["orig", "comp", "view", "cache"]
-        if cap.%k%
-            DllCall("gdiplus\GdipDisposeImage", "ptr", cap.%k%)
     for e in cap.history
         if IsObject(e)
             DllCall("gdiplus\GdipDisposeImage", "ptr", e.orig)
