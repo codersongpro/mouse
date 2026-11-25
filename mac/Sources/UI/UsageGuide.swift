@@ -31,7 +31,18 @@ struct UsageGuideView: View {
     private let ink = Color(red: 0x1E / 255, green: 0x29 / 255, blue: 0x3B / 255)
     private let blue = Color(red: 0x1D / 255, green: 0x4E / 255, blue: 0xD8 / 255)
 
+    // 내용이 화면보다 길면(작은 화면·큰 글씨) 이 높이로 자르고 스크롤한다 (nil = 내용 높이 그대로)
+    var scrollHeight: CGFloat? = nil
+
     var body: some View {
+        if let h = scrollHeight {
+            ScrollView(.vertical) { content }.frame(width: 600, height: h)
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("ClassZoom 사용 방법").font(.system(size: 22, weight: .bold)).foregroundColor(ink)
@@ -111,7 +122,16 @@ struct UsageGuideView: View {
             UsageGuideController.showOnStart = !dont
             self?.window?.close()
         }, onShowKeyboard: { [weak self] in self?.onShowKeyboard() })
-        let w = NSWindow(contentViewController: NSHostingController(rootView: view))
+        let hc = NSHostingController(rootView: view)
+        // 화면보다 길면 아래("시작하기")가 잘려 누를 수 없었다 → 화면 높이에 맞추고 스크롤 (2026-11-25 제보)
+        let vf = (NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main)?.visibleFrame
+        let maxH = (vf?.height ?? 800) - 60 // 제목 막대·여유
+        if hc.view.fittingSize.height > maxH {
+            var v = view
+            v.scrollHeight = maxH
+            hc.rootView = v
+        }
+        let w = NSWindow(contentViewController: hc)
         w.title = "ClassZoom 사용 방법"
         w.styleMask = [.titled, .closable]
         w.isReleasedWhenClosed = false

@@ -39,15 +39,23 @@ ShowUsageGuide(*) {
     if IsObject(usageGui)
         try usageGui.Destroy()
 
+    ; 창 = [내용(스크롤되는 칸 vp 안의 b)] + [아래 줄(다음부터 보지 않기·시작하기·만든 사람)].
+    ; 내용이 화면보다 길면(노트북·높은 배율) 아래가 잘려 "시작하기"를 누를 수 없었다(2026-11-25 제보).
+    ; 그래서 창 높이를 화면에 맞추고 내용 칸만 스크롤(휠·스크롤 막대)한다. 아래 줄은 늘 보인다.
     g := Gui("+AlwaysOnTop -MinimizeBox -MaximizeBox", "ClassZoom 사용 방법")
     usageGui := g
     g.BackColor := "FFFFFF"
     g.MarginX := 24, g.MarginY := 20
+    vp := Gui("-Caption +Parent" g.Hwnd)
+    vp.BackColor := "FFFFFF"
+    b := Gui("-Caption +Parent" vp.Hwnd)
+    b.BackColor := "FFFFFF"
+    b.MarginX := 24, b.MarginY := 0
 
-    g.SetFont("s17 bold c1E293B", "Malgun Gothic")
-    g.AddText("x24 y18 w520", "ClassZoom 사용 방법")
-    g.SetFont("s10 norm c475569")
-    g.AddText("x24 y+4 w520", "화면 오른쪽 아래 위젯의 버튼이나 단축키로 켜고 끕니다.")
+    b.SetFont("s17 bold c1E293B", "Malgun Gothic")
+    b.AddText("x24 y18 w520", "ClassZoom 사용 방법")
+    b.SetFont("s10 norm c475569")
+    b.AddText("x24 y+4 w520", "화면 오른쪽 아래 위젯의 버튼이나 단축키로 켜고 끕니다.")
 
     ; ---- 위젯 버튼 (F6 → F10 순서) ----
     rows := [
@@ -68,29 +76,31 @@ ShowUsageGuide(*) {
     y := 84
     for r in rows {
         ; 위젯과 같은 모양의 버튼 그림(연한 하늘색 칩 + 컬러 아이콘)으로 보여준다
-        hb := RenderButtonBitmap(0xEFF6FF, 0xFFFFFF, 44, 14, r[1], 32, -1)
-        g.AddPicture("x22 y" (y - 2) " w44 h44", "HBITMAP:" hb)
-        g.SetFont("s11 bold c1E293B")
-        g.AddText("x78 y" (y - 1) " w150", r[2])
-        g.SetFont("s10 bold c1D4ED8")
-        g.AddText("x232 y" (y - 1) " w120 h22 Center +0x200 BackgroundDBEAFE", r[3])
-        g.SetFont("s9 norm c475569")
-        g.AddText("x78 y" (y + 22) " w470", r[4])
+        ; 디스플레이 배율만큼 큰 그림으로 그려야 흐려지지 않는다
+        d := A_ScreenDPI / 96
+        hb := RenderButtonBitmap(0xEFF6FF, 0xFFFFFF, Round(44 * d), Round(14 * d), r[1], Round(32 * d), -1)
+        b.AddPicture("x22 y" (y - 2) " w44 h44", "HBITMAP:" hb)
+        b.SetFont("s11 bold c1E293B")
+        b.AddText("x78 y" (y - 1) " w150", r[2])
+        b.SetFont("s10 bold c1D4ED8")
+        b.AddText("x232 y" (y - 1) " w120 h22 Center +0x200 BackgroundDBEAFE", r[3])
+        b.SetFont("s9 norm c475569")
+        b.AddText("x78 y" (y + 22) " w470", r[4])
         y += InStr(r[4], "`n") ? 72 : 56
     }
 
     ; ---- 확대 중 / 그리는 중 ----
-    GuideSection(g, &y, "확대 중", [
+    GuideSection(b, &y, "확대 중", [
         ["Ctrl + 마우스 휠", "확대 단계 올리기 / 내리기"],
         ["Esc", "확대 끄기"],
         ["가장자리로 이동", "확대 화면이 그쪽으로 움직입니다 (평소에는 화면 고정)"],
         [HotkeyText(hotkeyCombos["Draw"]) " (드로잉)", "확대된 화면 위에 그대로 그립니다"],
         ["화면 공유", "Zoom·Meet에서 '화면 전체'를 고르면 확대 화면이 그대로 보입니다"]])
-    GuideSection(g, &y, "녹화", [
+    GuideSection(b, &y, "녹화", [
         [HotkeyText(hotkeyCombos["RecordPause"]), "일시정지 / 계속"],
         [HotkeyText(hotkeyCombos["RecordArea"]), "영역을 골라 그 부분만 녹화"],
         ["저장 위치", "동영상\ClassZoom 폴더 (설정 → 녹화에서 바꿈)"]])
-    GuideSection(g, &y, "드로잉 중", [
+    GuideSection(b, &y, "드로잉 중", [
         ["Caps Lock 누른 채 드래그", "드로잉 키 없이 바로 그리기 (떼면 그림은 남음)"],
         ["Ctrl / Shift + 드래그", "네모 / 원"],
         ["Z / X / C + 드래그", "직선 / 물결 / 화살표 (화살표 끝을 끌어 고침)"],
@@ -98,9 +108,26 @@ ShowUsageGuide(*) {
         ["1 ~ 9,  0", "색 바꾸기,  기본 색"],
         ["오른쪽 버튼 드래그", "지우개"],
         ["Ctrl + Z  /  Delete", "되돌리기  /  전부 지우기"]])
-    btnKeys := g.AddButton("x24 y" (y + 2) " w200 h30", "드로잉 단축키 전체 보기")
+    btnKeys := b.AddButton("x24 y" (y + 2) " w200 h30", "드로잉 단축키 전체 보기")
     btnKeys.OnEvent("Click", ShowShortcutGuide)
     y += 46
+    b.AddText("x0 y" y " w10 h1") ; 아래 여백
+
+    ; ---- 내용 높이를 재고, 화면에 들어가는 만큼만 보이게 (넘치면 스크롤) ----
+    b.Show("x0 y0 AutoSize NA")
+    WinGetPos(, , &bw, &bh, b) ; 실제 픽셀
+    d := A_ScreenDPI / 96
+    MouseGetPos(&mx, &my)
+    if !GetMonitorAt(mx, my, &ml, &mt, &mr, &mb, &wl, &wt, &wr, &wb)
+        wt := 0, wb := A_ScreenHeight
+    footPx := Round(96 * d), titlePx := Round(48 * d)
+    vpH := Min(bh, (wb - wt) - footPx - titlePx - Round(16 * d))
+    scroll := bh > vpH
+    sbw := scroll ? DllCall("GetSystemMetrics", "int", 2) : 0 ; SM_CXVSCROLL
+    vp.Show("x0 y0 NA")
+    DllCall("SetWindowPos", "ptr", vp.Hwnd, "ptr", 0, "int", 0, "int", 0, "int", bw + sbw, "int", vpH, "uint", 0x4 | 0x10)
+    GuideScrollSetup(scroll ? vp.Hwnd : 0, b.Hwnd, bh, vpH)
+    y := vpH / d ; 아래 줄은 내용 칸 바로 밑 (창 단위)
 
     ; ---- 아래: 다음부터 보지 않기 / 시작하기 ----
     g.AddText("x24 y" y " w520 h1 0x10")
@@ -114,8 +141,66 @@ ShowUsageGuide(*) {
     btnOk.OnEvent("Click", close)
     g.OnEvent("Close", close)
     g.OnEvent("Escape", close)
-    g.Show("Center AutoSize")
+    g.Show("Center w" Round((bw + sbw) / d) " h" Round(y + 80))
 }
+
+; ---- 내용 칸 스크롤 (휠 · 스크롤 막대) ----
+guideScroll := {vp: 0, body: 0, max: 0, page: 0, pos: 0}
+GuideScrollSetup(vpHwnd, bodyHwnd, total, page) {
+    global guideScroll
+    guideScroll := {vp: vpHwnd, body: bodyHwnd, max: total, page: page, pos: 0}
+    if !vpHwnd
+        return
+    DllCall("ShowScrollBar", "ptr", vpHwnd, "int", 1, "int", true) ; SB_VERT
+    si := Buffer(28, 0)
+    NumPut("UInt", 28, "UInt", 0x7, "Int", 0, "Int", total - 1, "UInt", page, "Int", 0, si) ; SIF_RANGE|PAGE|POS
+    DllCall("SetScrollInfo", "ptr", vpHwnd, "int", 1, "ptr", si, "int", true)
+}
+
+GuideScrollTo(pos) {
+    global guideScroll
+    pos := Max(0, Min(guideScroll.max - guideScroll.page, Round(pos)))
+    guideScroll.pos := pos
+    DllCall("SetWindowPos", "ptr", guideScroll.body, "ptr", 0, "int", 0, "int", -pos, "int", 0, "int", 0, "uint", 0x1 | 0x4 | 0x10)
+    si := Buffer(28, 0)
+    NumPut("UInt", 28, "UInt", 0x4, si) ; SIF_POS
+    NumPut("Int", pos, si, 20)
+    DllCall("SetScrollInfo", "ptr", guideScroll.vp, "int", 1, "ptr", si, "int", true)
+}
+
+GuideOnVScroll(wParam, lParam, msg, hwnd) {
+    global guideScroll
+    if (!guideScroll.vp || hwnd != guideScroll.vp)
+        return
+    line := Round(40 * A_ScreenDPI / 96), p := guideScroll.pos
+    switch wParam & 0xFFFF {
+    case 0: p -= line                      ; SB_LINEUP
+    case 1: p += line                      ; SB_LINEDOWN
+    case 2: p -= guideScroll.page          ; SB_PAGEUP
+    case 3: p += guideScroll.page          ; SB_PAGEDOWN
+    case 4, 5: p := (wParam >> 16) & 0xFFFF ; SB_THUMBPOSITION / SB_THUMBTRACK
+    case 6: p := 0                         ; SB_TOP
+    case 7: p := guideScroll.max           ; SB_BOTTOM
+    default: return 0
+    }
+    GuideScrollTo(p)
+    return 0
+}
+OnMessage(0x0115, GuideOnVScroll) ; WM_VSCROLL
+
+GuideOnWheel(wParam, lParam, msg, hwnd) {
+    global guideScroll, usageGui
+    if (!guideScroll.vp || !IsObject(usageGui))
+        return
+    if (DllCall("GetAncestor", "ptr", hwnd, "uint", 2, "ptr") != usageGui.Hwnd)
+        return
+    delta := (wParam >> 16) & 0xFFFF
+    if (delta > 0x7FFF)
+        delta -= 0x10000
+    GuideScrollTo(guideScroll.pos - delta / 120 * Round(60 * A_ScreenDPI / 96))
+    return 0
+}
+OnMessage(0x020A, GuideOnWheel) ; WM_MOUSEWHEEL
 
 ; 제목 한 줄 + "키 | 설명" 줄들
 GuideSection(g, &y, title, items) {
@@ -140,4 +225,5 @@ GuideClose(g, chk) {
     try IniWrite(showGuideOnStart ? 1 : 0, SETTINGS_PATH, "Common", "ShowGuide")
     try g.Destroy()
     usageGui := ""
+    GuideScrollSetup(0, 0, 0, 0)
 }

@@ -4963,7 +4963,15 @@ RoundRegion(hwnd, w, h, corner) {
 ; (그래서 꺼짐/켜짐 그림도 컨트롤을 둘 만들어 보이기/숨기기로 전환한다). 다시 만드는 편이
 ; 훨씬 확실하고, 자주 일어나는 일도 아니다.
 ; 위치는 유지한다 — 크기를 조절하는 동안 위젯이 구석으로 튀면 곤란하다.
+; 위젯·전자칠판 팔레트는 -DPIScale 창이고 크기는 모두 **실제 픽셀**로 여기서 계산한다(디스플레이 배율 포함).
+; 예전에는 창(AutoHotkey가 배율만큼 키움)과 버튼 그림·둥근 모서리(키우지 않음)가 따로 놀아서, 배율이
+; 125%·150%인 PC에서 그림이 칸보다 작고 모서리가 잘리는 등 비율이 달라졌다(2026-11-25 제보).
 WidgetPx(base) {
+    global widgetScale, boardMode, BOARD_WIDGET_SCALE
+    return Max(1, Round(base * widgetScale / 100 * (boardMode ? BOARD_WIDGET_SCALE : 1) * A_ScreenDPI / 96))
+}
+; 글자 크기(pt)는 Windows가 배율만큼 알아서 키우므로 배율을 곱하지 않는다
+WidgetPt(base) {
     global widgetScale, boardMode, BOARD_WIDGET_SCALE
     return Max(1, Round(base * widgetScale / 100 * (boardMode ? BOARD_WIDGET_SCALE : 1)))
 }
@@ -5029,11 +5037,11 @@ BuildWidget() {
     hBtnRecOn := RenderButtonBitmap(CHIP_REC_FILL, widgetBgColor, chip, corner, ICON_REC_PATH, icon, ICON_KEEP_COLOR)
     hBtnCap := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_CAP_PATH, icon, ICON_KEEP_COLOR)
 
-    widget := Gui((WidgetWantsTop() ? "+AlwaysOnTop " : "") "-Caption +ToolWindow", "ClassZoom")
+    widget := Gui((WidgetWantsTop() ? "+AlwaysOnTop " : "") "-Caption +ToolWindow -DPIScale", "ClassZoom")
     widget.BackColor := HexColor(widgetBgColor)
     ; 배경이 어두우면 ⋮와 ✕가 묻히므로 글자색을 뒤집는다 (밝기 기준은 사람 눈의 민감도 가중치)
     textColor := WidgetIsDark() ? "E6E6E6" : "000000"
-    widget.SetFont("s" Max(6, WidgetPx(10)) " c" textColor, "Malgun Gothic")
+    widget.SetFont("s" Max(6, WidgetPt(10)) " c" textColor, "Malgun Gothic")
     widgetTips := [] ; 마우스를 올리면 뜨는 설명 (위젯을 새로 만들 때마다 다시 모은다)
 
     p := vertical ? top : pad
@@ -5062,9 +5070,9 @@ BuildWidget() {
             AddWidgetTip(btnZoomOff, "zoom"), AddWidgetTip(btnZoomOn, "zoom")
         case "zplus", "zminus":
             ; 전자칠판 모드: Ctrl+휠 대신 손가락으로 누르는 확대 +/− (흰 칸에 큰 글자)
-            widget.SetFont("s" Max(8, WidgetPx(15)) " bold c1E293B")
+            widget.SetFont("s" Max(8, WidgetPt(15)) " bold c1E293B")
             t := widget.AddText(slot " Center +0x200 BackgroundFFFFFF", kind = "zplus" ? "+" : "−")
-            widget.SetFont("s" Max(6, WidgetPx(10)) " norm c" textColor)
+            widget.SetFont("s" Max(6, WidgetPt(10)) " norm c" textColor)
             t.OnEvent("Click", BoardZoomStep.Bind(kind = "zplus" ? 1 : -1))
             AddWidgetTip(t, kind)
             if (kind = "zplus")
@@ -5678,10 +5686,10 @@ ColorIsDark(c) {
 
 BuildBoardPalette() {
     global boardPalette, boardSwatches, boardEraserBtn, BOARD_PALETTE_COLORS, DRAW_COLORS, widgetBgColor, boardPaletteW, boardPaletteH
-    boardPalette := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000", "ClassZoom-Palette") ; 0x08000000 = 눌러도 활성화되지 않음
+    boardPalette := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x08000000", "ClassZoom-Palette") ; 0x08000000 = 눌러도 활성화되지 않음
     boardPalette.BackColor := HexColor(widgetBgColor)
     cell := WidgetPx(32), pad := WidgetPx(6), gap := WidgetPx(4)
-    boardPalette.SetFont("s" Max(8, WidgetPx(13)) " bold", "Malgun Gothic")
+    boardPalette.SetFont("s" Max(8, WidgetPt(13)) " bold", "Malgun Gothic")
     y := pad
     boardSwatches := []
     for idx in BOARD_PALETTE_COLORS {
