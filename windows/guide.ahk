@@ -39,18 +39,15 @@ ShowUsageGuide(*) {
     if IsObject(usageGui)
         try usageGui.Destroy()
 
-    ; 창 = [내용(스크롤되는 칸 vp 안의 b)] + [아래 줄(다음부터 보지 않기·시작하기·만든 사람)].
+    ; 창 = [내용] + [아래 줄(다음부터 보지 않기·시작하기·만든 사람)].
     ; 내용이 화면보다 길면(노트북·높은 배율) 아래가 잘려 "시작하기"를 누를 수 없었다(2026-11-25 제보).
-    ; 그래서 창 높이를 화면에 맞추고 내용 칸만 스크롤(휠·스크롤 막대)한다. 아래 줄은 늘 보인다.
+    ; 그래서 창 높이를 화면에 맞추고, 넘치면 내용 칸들만 위로 옮겨 스크롤한다(휠·스크롤 막대). 아래 줄은 늘 보인다.
+    ; 창 안에 창을 넣는 방식(+Parent)은 내용이 아예 그려지지 않는 PC가 있어(같은 날 제보) 한 창 안에서 칸을 옮긴다.
     g := Gui("+AlwaysOnTop -MinimizeBox -MaximizeBox", "ClassZoom 사용 방법")
     usageGui := g
     g.BackColor := "FFFFFF"
     g.MarginX := 24, g.MarginY := 20
-    vp := Gui("-Caption +Parent" g.Hwnd)
-    vp.BackColor := "FFFFFF"
-    b := Gui("-Caption +Parent" vp.Hwnd)
-    b.BackColor := "FFFFFF"
-    b.MarginX := 24, b.MarginY := 0
+    b := g ; 내용도 같은 창에 넣는다 (아래에서 내용 칸 목록을 모아 스크롤한다)
 
     b.SetFont("s17 bold c1E293B", "Malgun Gothic")
     b.AddText("x24 y18 w520", "ClassZoom 사용 방법")
@@ -111,23 +108,23 @@ ShowUsageGuide(*) {
     btnKeys := b.AddButton("x24 y" (y + 2) " w200 h30", "드로잉 단축키 전체 보기")
     btnKeys.OnEvent("Click", ShowShortcutGuide)
     y += 46
-    b.AddText("x0 y" y " w10 h1") ; 아래 여백
+    contentH := y ; 내용 높이 (창 단위)
+    ; 지금까지 만든 칸이 모두 "내용"이다 (아래 줄은 이 뒤에 만든다)
+    items := []
+    for hwnd, c in g {
+        c.GetPos(&cx, &cy, &cw, &ch)
+        items.Push({c: c, y: cy, h: ch})
+    }
 
-    ; ---- 내용 높이를 재고, 화면에 들어가는 만큼만 보이게 (넘치면 스크롤) ----
-    b.Show("x0 y0 AutoSize NA")
-    WinGetPos(, , &bw, &bh, b) ; 실제 픽셀
+    ; ---- 화면에 들어가는 만큼만 보이게 (넘치면 스크롤) ----
     d := A_ScreenDPI / 96
     MouseGetPos(&mx, &my)
     if !GetMonitorAt(mx, my, &ml, &mt, &mr, &mb, &wl, &wt, &wr, &wb)
         wt := 0, wb := A_ScreenHeight
-    footPx := Round(96 * d), titlePx := Round(48 * d)
-    vpH := Min(bh, (wb - wt) - footPx - titlePx - Round(16 * d))
-    scroll := bh > vpH
-    sbw := scroll ? DllCall("GetSystemMetrics", "int", 2) : 0 ; SM_CXVSCROLL
-    vp.Show("x0 y0 NA")
-    DllCall("SetWindowPos", "ptr", vp.Hwnd, "ptr", 0, "int", 0, "int", 0, "int", bw + sbw, "int", vpH, "uint", 0x4 | 0x10)
-    GuideScrollSetup(scroll ? vp.Hwnd : 0, b.Hwnd, bh, vpH)
-    y := vpH / d ; 아래 줄은 내용 칸 바로 밑 (창 단위)
+    avail := ((wb - wt) / d) - 80 - 48 - 16 ; 아래 줄 80 · 제목 막대 48 · 여유 16 (창 단위)
+    vpH := Min(contentH, Floor(avail))
+    scroll := contentH > vpH
+    y := vpH ; 아래 줄은 내용 칸 바로 밑
 
     ; ---- 아래: 다음부터 보지 않기 / 시작하기 ----
     g.AddText("x24 y" y " w520 h1 0x10")
@@ -141,38 +138,51 @@ ShowUsageGuide(*) {
     btnOk.OnEvent("Click", close)
     g.OnEvent("Close", close)
     g.OnEvent("Escape", close)
-    g.Show("Center w" Round((bw + sbw) / d) " h" Round(y + 80))
+    if scroll
+        g.Opt("+0x200000") ; WS_VSCROLL
+    g.Show("Center w" (570 + (scroll ? Round(DllCall("GetSystemMetrics", "int", 2) / d) : 0)) " h" Round(y + 80))
+    GuideScrollSetup(scroll ? g.Hwnd : 0, items, contentH, vpH)
 }
 
 ; ---- 내용 칸 스크롤 (휠 · 스크롤 막대) ----
-guideScroll := {vp: 0, body: 0, max: 0, page: 0, pos: 0}
-GuideScrollSetup(vpHwnd, bodyHwnd, total, page) {
+; 내용 칸들을 위로 옮기고, 내용 영역(0 ~ page)을 벗어나는 칸은 숨긴다 (아래 줄을 덮지 않게). 단위는 창 단위.
+guideScroll := {hwnd: 0, items: [], max: 0, page: 0, pos: 0}
+GuideScrollSetup(hwnd, items, total, page) {
     global guideScroll
-    guideScroll := {vp: vpHwnd, body: bodyHwnd, max: total, page: page, pos: 0}
-    if !vpHwnd
+    guideScroll := {hwnd: hwnd, items: items, max: total, page: page, pos: 0}
+    if !hwnd
         return
-    DllCall("ShowScrollBar", "ptr", vpHwnd, "int", 1, "int", true) ; SB_VERT
     si := Buffer(28, 0)
-    NumPut("UInt", 28, "UInt", 0x7, "Int", 0, "Int", total - 1, "UInt", page, "Int", 0, si) ; SIF_RANGE|PAGE|POS
-    DllCall("SetScrollInfo", "ptr", vpHwnd, "int", 1, "ptr", si, "int", true)
+    NumPut("UInt", 28, "UInt", 0x7, "Int", 0, "Int", Round(total) - 1, "UInt", Round(page), "Int", 0, si) ; SIF_RANGE|PAGE|POS
+    DllCall("SetScrollInfo", "ptr", hwnd, "int", 1, "ptr", si, "int", true)
+    GuideScrollTo(0)
 }
 
 GuideScrollTo(pos) {
     global guideScroll
     pos := Max(0, Min(guideScroll.max - guideScroll.page, Round(pos)))
     guideScroll.pos := pos
-    DllCall("SetWindowPos", "ptr", guideScroll.body, "ptr", 0, "int", 0, "int", -pos, "int", 0, "int", 0, "uint", 0x1 | 0x4 | 0x10)
+    DllCall("SendMessage", "ptr", guideScroll.hwnd, "uint", 0x000B, "ptr", 0, "ptr", 0) ; WM_SETREDRAW 끔 (옮기는 동안 깜빡이지 않게)
+    for it in guideScroll.items {
+        ny := it.y - pos
+        try {
+            it.c.Move(, ny)
+            it.c.Visible := (ny >= 0 && ny + it.h <= guideScroll.page)
+        }
+    }
+    DllCall("SendMessage", "ptr", guideScroll.hwnd, "uint", 0x000B, "ptr", 1, "ptr", 0)
+    DllCall("RedrawWindow", "ptr", guideScroll.hwnd, "ptr", 0, "ptr", 0, "uint", 0x1 | 0x4 | 0x80 | 0x100) ; INVALIDATE|ERASE|ALLCHILDREN|UPDATENOW
     si := Buffer(28, 0)
     NumPut("UInt", 28, "UInt", 0x4, si) ; SIF_POS
     NumPut("Int", pos, si, 20)
-    DllCall("SetScrollInfo", "ptr", guideScroll.vp, "int", 1, "ptr", si, "int", true)
+    DllCall("SetScrollInfo", "ptr", guideScroll.hwnd, "int", 1, "ptr", si, "int", true)
 }
 
 GuideOnVScroll(wParam, lParam, msg, hwnd) {
     global guideScroll
-    if (!guideScroll.vp || hwnd != guideScroll.vp)
+    if (!guideScroll.hwnd || hwnd != guideScroll.hwnd)
         return
-    line := Round(40 * A_ScreenDPI / 96), p := guideScroll.pos
+    line := 40, p := guideScroll.pos
     switch wParam & 0xFFFF {
     case 0: p -= line                      ; SB_LINEUP
     case 1: p += line                      ; SB_LINEDOWN
@@ -190,14 +200,14 @@ OnMessage(0x0115, GuideOnVScroll) ; WM_VSCROLL
 
 GuideOnWheel(wParam, lParam, msg, hwnd) {
     global guideScroll, usageGui
-    if (!guideScroll.vp || !IsObject(usageGui))
+    if (!guideScroll.hwnd || !IsObject(usageGui))
         return
     if (DllCall("GetAncestor", "ptr", hwnd, "uint", 2, "ptr") != usageGui.Hwnd)
         return
     delta := (wParam >> 16) & 0xFFFF
     if (delta > 0x7FFF)
         delta -= 0x10000
-    GuideScrollTo(guideScroll.pos - delta / 120 * Round(60 * A_ScreenDPI / 96))
+    GuideScrollTo(guideScroll.pos - delta / 120 * 60)
     return 0
 }
 OnMessage(0x020A, GuideOnWheel) ; WM_MOUSEWHEEL
@@ -225,5 +235,5 @@ GuideClose(g, chk) {
     try IniWrite(showGuideOnStart ? 1 : 0, SETTINGS_PATH, "Common", "ShowGuide")
     try g.Destroy()
     usageGui := ""
-    GuideScrollSetup(0, 0, 0, 0)
+    GuideScrollSetup(0, [], 0, 0)
 }
