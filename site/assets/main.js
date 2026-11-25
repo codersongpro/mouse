@@ -16,14 +16,14 @@ fetch("https://api.github.com/repos/codersongpro/mouse/releases/latest", { heade
   })
   .catch(() => {});
 
-// 히어로 그림: 전자칠판 수업 장면을 0→1→2→3 순서로 계속 돌린다 (단계 버튼을 누르면 그 장면부터).
+// 히어로 그림: 전자칠판 수업 장면을 0→1→2→3→4 순서로 계속 돌린다 (F6 캡처 → F7 줌 → F8 하이라이트 → F9 드로잉 → F10 녹화) (단계 버튼을 누르면 그 장면부터).
 // 장면 사이의 움직임은 index.html의 CSS transition이 맡는다. 탭이 안 보일 때는 쉰다.
 (() => {
   const board = document.querySelector(".js-demo");
   if (!board) return;
   const btns = document.querySelectorAll(".demo-steps [data-go]");
   const time = board.querySelector(".js-rec-time");
-  const HOLD = [2800, 3000, 2800, 3400]; // 장면마다 머무는 시간(ms)
+  const HOLD = [2800, 2800, 2800, 3000, 3400]; // 장면마다 머무는 시간(ms)
   let step = 0, timer = 0, recTimer = 0, sec = 0;
 
   function show(n) {
@@ -31,14 +31,14 @@ fetch("https://api.github.com/repos/codersongpro/mouse/releases/latest", { heade
     board.dataset.step = String(n);
     btns.forEach(b => b.setAttribute("aria-pressed", String(Number(b.dataset.go) === n)));
     clearInterval(recTimer);
-    if (n === 3) {
+    if (n === 4) {
       sec = 0;
       const tick = () => { time.textContent = "녹화 중 00:" + String(sec++).padStart(2, "0"); };
       tick();
       recTimer = setInterval(tick, 1000);
     }
     clearTimeout(timer);
-    timer = setTimeout(() => show((step + 1) % 4), HOLD[n]);
+    timer = setTimeout(() => show((step + 1) % HOLD.length), HOLD[n]);
   }
   btns.forEach(b => b.addEventListener("click", () => show(Number(b.dataset.go))));
   document.addEventListener("visibilitychange", () => {

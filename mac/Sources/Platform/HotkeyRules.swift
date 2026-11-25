@@ -25,6 +25,10 @@ enum HotkeyRules {
         case "RecordAlt": return "녹화 (대체 키)"
         case "RecordPause": return "녹화 일시정지/계속"
         case "RecordArea": return "영역 지정 녹화"
+        case "Capture": return "창 캡처"
+        case "CaptureAlt": return "창 캡처 (대체 키)"
+        case "CaptureArea": return "구역 지정 캡처"
+        case "CaptureScreen": return "전체 화면 캡처"
         default: return name
         }
     }

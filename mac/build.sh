@@ -32,9 +32,9 @@ cp Info.plist "$APP/Contents/"
 
 # 그림: 위젯·안내 창의 컬러 아이콘은 두 판이 같이 쓰는 shared/, 메뉴 막대용 단색 그림은 mac/
 SHARED="$ROOT/shared"
-RES=("$SHARED/icon_spotlight_color.png" "$SHARED/icon_draw_color.png" "$SHARED/icon_zoom_color.png"
+RES=("$SHARED/icon_capture_color.png" "$SHARED/icon_spotlight_color.png" "$SHARED/icon_draw_color.png" "$SHARED/icon_zoom_color.png"
      "$SHARED/icon_record_color.png" "$SHARED/icon_settings_color.png" icon_menubar.png
-     glyphs/glyph_spotlight.png glyphs/glyph_draw.png glyphs/glyph_zoom.png glyphs/glyph_record.png glyphs/glyph_settings.png)
+     glyphs/glyph_spotlight.png glyphs/glyph_draw.png glyphs/glyph_zoom.png glyphs/glyph_record.png glyphs/glyph_settings.png glyphs/glyph_capture.png)
 for f in "${RES[@]}"; do
   [ -f "$f" ] || { echo "빌드 실패: 그림 파일이 없음: $f"; exit 1; }
   cp "$f" "$APP/Contents/Resources/"

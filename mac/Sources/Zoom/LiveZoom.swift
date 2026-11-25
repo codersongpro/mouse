@@ -76,6 +76,8 @@ final class ZoomCursorView: NSView {
     private let imageLayer = CALayer()
     private var cursorWindow: NSWindow?
     private var badgeWindow: NSWindow?
+    // 화면 캡처에서 뺄 창 (확대 중 그린 커서·단계 표시). 확대 화면 자체는 찍힌다 — "확대한 채로 캡처"
+    var overlayWindowNumbers: [Int] { [cursorWindow, badgeWindow].compactMap { $0?.windowNumber } }
     private var badgeLabel: NSTextField?
     private var badgeUntil: CFTimeInterval = 0
     private var stream: SCStream?

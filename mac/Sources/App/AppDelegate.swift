@@ -14,6 +14,9 @@ import Combine
     let zoom = LiveZoom()                 // 라이브 줌 (Zoom/LiveZoom.swift)
     let recorder = Recorder()             // 화면 녹화 (Record/Recorder.swift)
     let guide = UsageGuideController()    // 사용 방법 안내 창 (UI/UsageGuide.swift)
+    let capturer = Capturer()             // 화면 캡처 (Capture/Capture.swift)
+    var captureEditor: CaptureEditor?     // 캡처 편집 창 (하나만)
+    var zoomResumeStep = 0                // 편집 창을 닫으면 다시 켤 확대 단계
     var widget: Widget!
     var statusItem: NSStatusItem!
     var statusMenu: NSMenu?       // 메뉴 막대 메뉴 (합친 아이콘 모드에서는 누를 때마다 꺼내 보인다)
@@ -99,6 +102,10 @@ import Combine
             self.state.recording = self.recorder.isActive
         }
         recorder.cursorDrawnByUs = { [weak self] in (self?.zoom.isOn ?? false) || (self?.state.drawOn ?? false) }
+        // 영역을 고르는 동안 esc는 "취소" — 라이브 줌의 esc(확대 끄기)를 내려 두었다가 되돌린다
+        recorder.willPick = { HotKeyRegistry.shared.unregisterGroup(.zoom) }
+        recorder.didPick = { [weak self] in self?.zoom.updateKeys() }
+        setupCapture()
         draw.willTurnOn = { HotKeyRegistry.shared.unregisterGroup(.zoom) } // 드로잉의 esc와 겹치지 않게
         guide.onShowKeyboard = { [weak self] in self?.keyboardWindow.show() }
         clicks.start()
@@ -197,6 +204,9 @@ import Combine
             "Record": { [weak self] in self?.recorder.toggle(area: false) }, "RecordAlt": { [weak self] in self?.recorder.toggle(area: false) },
             "RecordPause": { [weak self] in self?.recorder.pauseToggle() },
             "RecordArea": { [weak self] in self?.recorder.toggle(area: true) },
+            "Capture": { [weak self] in self?.startCapture(.window) }, "CaptureAlt": { [weak self] in self?.startCapture(.window) },
+            "CaptureArea": { [weak self] in self?.startCapture(.area) },
+            "CaptureScreen": { [weak self] in self?.startCapture(.screen) },
         ]
         let entries: [HotKeyEntry] = SettingsSchema.hotkeys.compactMap { h in
             guard let combo = HotkeyNotation.parse(Settings.shared.hotkeys[h.name] ?? h.def), let action = actions[h.name] else { return nil }
@@ -247,6 +257,11 @@ import Combine
     func showStartupNotices(_ load: Settings.LoadResult) {
         if case .unreadable(let reason, let backup) = load {
             Notice.show(Notice.unreadable(reason: reason, backup: backup))
+        }
+        if !Settings.shared.blankedHotkeys.isEmpty {
+            let names = Settings.shared.blankedHotkeys.map(HotkeyRules.label).joined(separator: ", ")
+            Notice.show(NoticeContent(title: "캡처 단축키를 비워 두었습니다",
+                                      body: ["다른 기능이 이미 쓰는 키라서 \(names) 단축키를 비워 두었습니다. 설정 › 단축키에서 정해 주세요."]))
         }
         if Notice.isTranslocated() {
             AppLog.write("SESSION", "translocated")
@@ -332,6 +347,7 @@ import Combine
         case .draw: draw.isOn ? draw.turnOff(.widgetButton) : draw.turnOn() // 위젯으로 끄면 정리하고 나간다 (Esc와 같음)
         case .zoom: zoom.cycle()
         case .record: recorder.toggle(area: false)
+        case .capture: startCapture(.window)
         case .settings: openSettings()
         case .close:
             Settings.shared.showWidget = false
@@ -407,5 +423,66 @@ import Combine
         AppLog.write("SESSION", "quit")
         Log.log("SESSION", "quit")
         Log.stop()
+    }
+}
+
+// ---------- 화면 캡처 (F6) ----------
+extension AppDelegate {
+    func setupCapture() {
+        // 찍지 않을 우리 창: 위젯·강조 원·클릭 링·녹화 표시·확대 중 그린 커서·고르기 창. 확대 화면과 드로잉 판은 찍힌다.
+        capturer.excluded = { [weak self] in
+            guard let self else { return [] }
+            return [self.widget?.window.windowNumber, self.spotlight.windowNumber].compactMap { $0 }
+                + self.clicks.windowNumbers + self.recorder.windowNumbers + self.zoom.overlayWindowNumbers + self.capturer.windowNumbers
+        }
+        capturer.willPick = { [weak self] in
+            guard let self else { return }
+            // 드로잉 중이면 오른쪽 ⌥를 뗀 것처럼: 그림은 화면에 남고(찍힌다) 드로잉 키(esc 등)는 풀린다
+            if self.draw.isOn { self.draw.turnOff(.hold) }
+            HotKeyRegistry.shared.unregisterGroup(.zoom) // esc = 고르기 취소 (확대를 끄지 않게)
+        }
+        capturer.didPick = { [weak self] in self?.zoom.updateKeys() }
+        capturer.onCaptured = { [weak self] img in self?.openCaptureEditor(img) }
+        capturer.onCancelled = { [weak self] in self?.captureEditor?.window.orderFront(nil) }
+    }
+
+    func startCapture(_ mode: Capturer.Mode) {
+        // 저장하지 않은 편집 창이 있으면 먼저 묻는다
+        if let e = captureEditor, e.dirty {
+            let a = NSAlert()
+            a.messageText = "편집한 캡처를 저장하지 않았습니다"
+            a.informativeText = "새로 캡처하면 지금 편집 창은 닫힙니다. 계속할까요?"
+            a.addButton(withTitle: "아니요")
+            a.addButton(withTitle: "새로 캡처")
+            NSApp.activate(ignoringOtherApps: true)
+            guard a.runModal() == .alertSecondButtonReturn else { return }
+        }
+        captureEditor?.window.orderOut(nil) // 찍히지 않게
+        capturer.capture(mode)
+    }
+
+    func openCaptureEditor(_ img: CGImage) {
+        _ = copyImageToPasteboard(img) // 찍자마자 붙여넣기할 수 있게
+        if let old = captureEditor {
+            old.onClose = {}
+            old.closeQuietly()
+        }
+        // 확대 위에서는 편집 창을 누르는 자리가 어긋난다 → 잠시 끄고, 닫으면 같은 단계로 다시 켠다
+        if zoom.isOn {
+            zoomResumeStep = zoom.step
+            zoom.stop()
+        }
+        let e = CaptureEditor(image: img)
+        e.onClose = { [weak self] in
+            guard let self else { return }
+            self.captureEditor = nil
+            if self.zoomResumeStep > 0 {
+                let step = self.zoomResumeStep
+                self.zoomResumeStep = 0
+                self.zoom.start(step: step)
+            }
+        }
+        captureEditor = e
+        e.show()
     }
 }

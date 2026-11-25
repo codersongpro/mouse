@@ -31,7 +31,18 @@ struct UsageGuideView: View {
     private let ink = Color(red: 0x1E / 255, green: 0x29 / 255, blue: 0x3B / 255)
     private let blue = Color(red: 0x1D / 255, green: 0x4E / 255, blue: 0xD8 / 255)
 
+    // 내용이 화면보다 길면(작은 화면·큰 글씨) 이 높이로 자르고 스크롤한다 (nil = 내용 높이 그대로)
+    var scrollHeight: CGFloat? = nil
+
     var body: some View {
+        if let h = scrollHeight {
+            ScrollView(.vertical) { content }.frame(width: 600, height: h)
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("ClassZoom 사용 방법").font(.system(size: 22, weight: .bold)).foregroundColor(ink)
@@ -39,6 +50,7 @@ struct UsageGuideView: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 10) {
+                row("icon_capture_color", "화면 캡처", "\(key("Capture")) · \(key("CaptureAlt"))", "창을 클릭하거나 구역을 끌어서 찍고 펜·도형·글자·모자이크를 넣습니다. 바로 클립보드에 복사되고 사진 › ClassZoom에 저장합니다. 전체 화면 \(key("CaptureScreen")) · 구역 지정 \(key("CaptureArea"))")
                 row("icon_zoom_color", "라이브 줌", "\(key("Zoom")) · \(key("ZoomAlt"))", "누를 때마다 1단계 → 2단계 → 3단계 → 끄기. 화면은 고정되고 커서만 움직입니다.")
                 row("icon_spotlight_color", "마우스 하이라이트", "\(key("Spotlight")) · \(key("SpotlightAlt"))", "커서 주위를 원하는 색의 원으로 밝히고(색은 설정에서 고름), 클릭하면 원이 오므라듭니다.")
                 row("icon_draw_color", "드로잉", "\(key("Draw")) · \(key("DrawAlt"))", "화면 위에 그립니다. 오른쪽 ⌥를 누르고 있는 동안에도 그려집니다. esc는 지우고 끄기.")
@@ -51,7 +63,7 @@ struct UsageGuideView: View {
                 section("녹화", [(key("RecordPause"), "일시정지 · 계속"), (key("RecordArea"), "영역 골라 녹화"), ("표시창", "일시정지 · 정지 버튼")])
             }
             section("드로잉 중", [("오른쪽 ⌥ + 끌기", "F9 없이 바로 (떼면 그림은 남음)"), ("⌃ / ⇧ + 끌기", "네모 / 원"), ("Z / X / C + 끌기", "직선 / 물결 / 화살표"), ("V + 끌기", "강조 화살표"), ("1 ~ 9, 0", "색 바꾸기, 기본 색"), ("⌥ + 끌기", "지우개"), ("⌘Z / delete", "되돌리기 / 전부 지우기")])
-            Text("라이브 줌과 화면 녹화는 처음 쓸 때 화면 기록 권한을 묻습니다. 시스템 설정 › 개인정보 보호 및 보안 › 화면 및 시스템 오디오 녹화에서 ClassZoom을 켜 주세요.")
+            Text("화면 캡처·라이브 줌·화면 녹화는 처음 쓸 때 화면 기록 권한을 묻습니다. 시스템 설정 › 개인정보 보호 및 보안 › 화면 및 시스템 오디오 녹화에서 ClassZoom을 켜 주세요.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("드로잉 단축키 전체 보기", action: onShowKeyboard)
@@ -110,7 +122,16 @@ struct UsageGuideView: View {
             UsageGuideController.showOnStart = !dont
             self?.window?.close()
         }, onShowKeyboard: { [weak self] in self?.onShowKeyboard() })
-        let w = NSWindow(contentViewController: NSHostingController(rootView: view))
+        let hc = NSHostingController(rootView: view)
+        // 화면보다 길면 아래("시작하기")가 잘려 누를 수 없었다 → 화면 높이에 맞추고 스크롤 (2026-11-25 제보)
+        let vf = (NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main)?.visibleFrame
+        let maxH = (vf?.height ?? 800) - 60 // 제목 막대·여유
+        if hc.view.fittingSize.height > maxH {
+            var v = view
+            v.scrollHeight = maxH
+            hc.rootView = v
+        }
+        let w = NSWindow(contentViewController: hc)
         w.title = "ClassZoom 사용 방법"
         w.styleMask = [.titled, .closable]
         w.isReleasedWhenClosed = false

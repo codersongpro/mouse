@@ -135,7 +135,11 @@ enum SettingsSchema {
         ("Zoom", "F7", false), ("ZoomAlt", "^!3", true),
         ("Record", "F10", false), ("RecordAlt", "^!4", true),
         ("RecordPause", "^F10", false), ("RecordArea", "^+F10", false),
+        ("Capture", "F6", false), ("CaptureAlt", "^!5", true), ("CaptureArea", "^+F6", false), ("CaptureScreen", "+F6", false),
     ]
+    // 나중에 생긴 단축키(캡처). 예전에 다른 기능을 이 키로 바꿔 둔 경우 새 기본값이 그 키를 빼앗지 않게,
+    // 읽을 때 겹치면 이쪽을 비워 둔다(Settings.load). 설정 › 단축키에서 다른 키로 정하면 된다.
+    static let laterHotkeys = ["Capture", "CaptureAlt", "CaptureArea", "CaptureScreen"]
     static var hotkeyDefaults: [String: String] { Dictionary(uniqueKeysWithValues: hotkeys.map { ($0.name, $0.def) }) }
 
     static func key(_ section: String, _ key: String) -> SettingKey? { keys.first { $0.section == section && $0.key == key } }

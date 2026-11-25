@@ -142,8 +142,11 @@ enum SettingsSchemaTests {
             if k.defaultValue != v { wrong.append("\(id) 기본 \(v)") }
         }
         check("Windows와 같은 범위·기본값: 대조 \(compared)개가 모두 같음", wrong.isEmpty && compared >= 18, wrong.joined(separator: "; "))
-        let hk = matches("HOTKEY_DEFAULTS := Map\\(\"(\\w+)\", \"(\\w+)\", \"(\\w+)\", \"(\\w+)\"\\)").first ?? []
+        // HOTKEY_DEFAULTS := Map("이름", "키", …) 여러 줄 전체를 읽는다 (캡처 F6까지)
+        let body = matches("HOTKEY_DEFAULTS := Map\\(([^)]*)\\)").first?.first ?? ""
+        let hk = (try? NSRegularExpression(pattern: "\"([^\"]+)\""))
+            .map { re in re.matches(in: body, range: NSRange(body.startIndex..., in: body)).map { String(body[Range($0.range(at: 1), in: body)!]) } } ?? []
         let winHK = SettingsSchema.hotkeys.filter { !$0.macOnly }.flatMap { [$0.name, $0.def] }
-        check("Windows와 같은 단축키 기본값 (Spotlight=F8, Draw=F9)", hk == winHK, "\(hk)")
+        check("Windows와 같은 단축키 기본값 (F6 캡처 ~ F10 녹화)", hk == winHK, "\(hk)")
     }
 }

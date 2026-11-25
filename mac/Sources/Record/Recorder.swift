@@ -21,6 +21,8 @@ import ScreenCaptureKit
     var isActive: Bool { phase != .idle }
     var onChange: () -> Void = {}
     var cursorDrawnByUs: () -> Bool = { false }   // 확대·드로잉 중 (그때는 시스템 커서를 넣지 않는다)
+    var willPick: () -> Void = {}                 // 영역 고르기 시작·끝 (AppDelegate가 줌 esc를 내리고 올린다)
+    var didPick: () -> Void = {}
 
     private var stream: SCStream?
     private var engine: RecordEngine?
@@ -108,9 +110,11 @@ import ScreenCaptureKit
         phase = .picking
         let p = AreaPicker()
         picker = p
+        willPick() // 라이브 줌의 esc를 내려 둔다 (esc = 고르기 취소, 확대를 끄지 않게)
         p.pick { [weak self] r in
             guard let self else { return }
             self.picker = nil
+            self.didPick()
             guard let r, let scr = NSScreen.screens.first(where: { $0.frame.intersects(r) }) else { self.phase = .idle; return }
             self.begin(rect: r.intersection(scr.frame), on: scr)
         }
@@ -568,11 +572,15 @@ final class RecordEngine: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSamp
     private var windows: [NSWindow] = []
     private var done: ((CGRect?) -> Void)?
     private var monitors: [Any] = []
-    var windowNumbers: [Int] { windows.map(\.windowNumber) }
+    private var hintWindow: NSWindow?
+    var minSize: CGFloat = 40     // 이보다 작게 끌면 취소 (녹화 40pt, 캡처 8pt)
+    var hint: String? = nil       // 화면 위쪽에 띄울 안내 (캡처)
+    var windowNumbers: [Int] { windows.map(\.windowNumber) + [hintWindow?.windowNumber].compactMap { $0 } }
 
     final class PickView: NSView {
         var start: NSPoint?
         var current: NSPoint?
+        var minSize: CGFloat = 40
         var onFinish: (CGRect?) -> Void = { _ in }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override func resetCursorRects() { addCursorRect(bounds, cursor: .crosshair) }
@@ -584,7 +592,7 @@ final class RecordEngine: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSamp
             guard let a = start else { onFinish(nil); return }
             let b = at
             let r = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
-            onFinish(r.width >= 40 && r.height >= 40 ? r : nil)
+            onFinish(r.width >= minSize && r.height >= minSize ? r : nil)
         }
         override func rightMouseDown(with e: NSEvent) { onFinish(nil) }
         override func draw(_ dirtyRect: NSRect) {
@@ -615,11 +623,13 @@ final class RecordEngine: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSamp
             w.sharingType = .none
             let v = PickView(frame: NSRect(origin: .zero, size: scr.frame.size))
             v.onFinish = { [weak self] r in self?.finish(r) }
+            v.minSize = minSize
             w.contentView = v
             w.setFrame(scr.frame, display: true)
             w.orderFrontRegardless()
             windows.append(w)
         }
+        if let h = hint { hintWindow = showPickHint(h) }
         windows.first?.makeKey()
         let esc: (NSEvent) -> Void = { [weak self] e in if e.keyCode == 53 { self?.finish(nil) } }
         if let g = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: esc) { monitors.append(g) }
@@ -632,6 +642,7 @@ final class RecordEngine: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSamp
         done = nil
         monitors.forEach(NSEvent.removeMonitor); monitors = []
         windows.forEach { $0.orderOut(nil) }; windows = []
+        hintWindow?.orderOut(nil); hintWindow = nil
         d(r)
     }
 }
