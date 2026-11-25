@@ -133,7 +133,23 @@ final class Settings: ObservableObject {
             let text = ini.value("Hotkeys", h.name) ?? h.def
             hotkeys[h.name] = HotkeyNotation.parse(text).map(HotkeyNotation.isSafe) == true ? text : h.def
         }
+        blankLaterHotkeyConflicts()
         return .loaded
+    }
+
+    // 새로 생긴 단축키(캡처 F6 등)가 다른 기능의 키와 겹치면 새 것을 비운다 (원래 쓰던 기능의 키를 빼앗지 않게)
+    private(set) var blankedHotkeys: [String] = []
+    func blankLaterHotkeyConflicts() {
+        blankedHotkeys = []
+        let later = SettingsSchema.laterHotkeys
+        for name in later {
+            guard let mine = hotkeys[name].flatMap(HotkeyNotation.parse) else { continue }
+            let clash = SettingsSchema.hotkeys.contains { o in
+                o.name != name && (later.firstIndex(of: o.name).map { $0 < later.firstIndex(of: name)! } ?? true)
+                    && hotkeys[o.name].flatMap(HotkeyNotation.parse) == mine
+            }
+            if clash { hotkeys[name] = ""; blankedHotkeys.append(name) }
+        }
     }
 
     // 읽을 수 없는 파일을 settings.ini.bak(이미 있으면 .bak2, .bak3 …)으로 복사해 둔다

@@ -39,6 +39,11 @@ extension AppDelegate {
         func keys(_ a: String, _ b: String) -> String {
             [a, b].map { HotkeyDisplay.symbols(Settings.shared.hotkeys[$0] ?? SettingsSchema.hotkeyDefaults[$0] ?? "") }.joined(separator: " · ")
         }
+        add("화면 캡처 (\(keys("Capture", "CaptureAlt")))", #selector(menuCapture))
+        func key(_ n: String) -> String { HotkeyDisplay.symbols(Settings.shared.hotkeys[n] ?? SettingsSchema.hotkeyDefaults[n] ?? "") }
+        add("구역 지정 캡처 (\(key("CaptureArea")))", #selector(menuCaptureArea))
+        add("전체 화면 캡처 (\(key("CaptureScreen")))", #selector(menuCaptureScreen))
+        menu.addItem(.separator())
         add("라이브 줌 (\(keys("Zoom", "ZoomAlt")))", #selector(menuZoom), on: zoom.isOn)
         add("하이라이트 (\(keys("Spotlight", "SpotlightAlt")))", #selector(menuSpot), on: state.spotOn)
         add("드로잉 (\(keys("Draw", "DrawAlt")))", #selector(menuDraw), on: draw.isOn)
@@ -78,6 +83,9 @@ extension AppDelegate {
         keyboardWindow.show()
     }
     @objc func menuSpot() { toggleSpotlight() }
+    @objc func menuCapture() { startCapture(.window) }
+    @objc func menuCaptureArea() { startCapture(.area) }
+    @objc func menuCaptureScreen() { startCapture(.screen) }
     @objc func menuZoom() { zoom.cycle() }
     @objc func menuRec() { recorder.toggle(area: false) }
     @objc func menuRecArea() { recorder.toggle(area: true) }

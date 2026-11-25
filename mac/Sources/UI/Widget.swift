@@ -1,6 +1,7 @@
 import AppKit
 
-// 화면 구석의 작은 조작판: ⋮(옮기기) · 하이라이트 · 드로잉 · 라이브 줌 · 녹화 · 설정 · ✕(숨기기)
+// 화면 구석의 작은 조작판: ⋮(옮기기) · 캡처 · 라이브 줌 · 하이라이트 · 드로잉 · 녹화 · 설정 · ✕(숨기기)
+// 기본 단축키 순서(F6 → F10)와 같은 차례다 (Windows 판·안내문·랜딩페이지와 같음).
 // 아이콘은 컬러 그림을 그대로 쓰고, 켜진 칸은 바탕을 하늘색(녹화 중은 연한 빨강)으로 칠한다 (Windows 판과 같음).
 // Windows 판과 같은 크기 비율(칩 32, 모서리 12, 아이콘 22)을 쓴다.
 
@@ -40,7 +41,8 @@ final class WidgetTipOwner: NSObject, NSViewToolTipOwner {
 }
 
 final class WidgetView: NSView {
-    enum Part { case grip, spot, draw, zoom, record, settings, close }
+    enum Part { case grip, capture, zoom, spot, draw, record, settings, close }
+    static let allParts: [Part] = [.grip, .capture, .zoom, .spot, .draw, .record, .settings, .close]
 
     // 강조·드로잉이 켜져 있는지는 AppState가 든다 (위젯이 따로 기억하지 않는다). 바뀌면 AppDelegate가 다시 그리게 한다.
     let state: AppState
@@ -76,7 +78,7 @@ final class WidgetView: NSView {
     static var narrow: CGFloat { px(14) }
     static var gap: CGFloat { px(4) }
     static var size: NSSize {
-        NSSize(width: pad * 2 + narrow * 2 + chip * 5 + gap * 6, height: chip + top * 2)
+        NSSize(width: pad * 2 + narrow * 2 + chip * 6 + gap * 7, height: chip + top * 2)
     }
 
     private var isDark: Bool {
@@ -89,7 +91,7 @@ final class WidgetView: NSView {
         let chip = WidgetView.chip, gap = WidgetView.gap, narrow = WidgetView.narrow
         var x = WidgetView.pad
         let y = WidgetView.top
-        let order: [(Part, CGFloat)] = [(.grip, narrow), (.spot, chip), (.draw, chip), (.zoom, chip), (.record, chip), (.settings, chip), (.close, narrow)]
+        let order: [(Part, CGFloat)] = [(.grip, narrow), (.capture, chip), (.zoom, chip), (.spot, chip), (.draw, chip), (.record, chip), (.settings, chip), (.close, narrow)]
         for (p, w) in order {
             if p == part { return NSRect(x: x, y: y, width: w, height: chip) }
             x += w + gap
@@ -98,7 +100,7 @@ final class WidgetView: NSView {
     }
 
     private func part(at p: NSPoint) -> Part? {
-        for part in [Part.grip, .spot, .draw, .zoom, .record, .settings, .close] where rect(part).insetBy(dx: -2, dy: -WidgetView.top).contains(p) {
+        for part in WidgetView.allParts where rect(part).insetBy(dx: -2, dy: -WidgetView.top).contains(p) {
             return part
         }
         return nil
@@ -106,7 +108,7 @@ final class WidgetView: NSView {
 
     func reloadIcons() {
         icons = [:]
-        for (k, f) in [("spot", "icon_spotlight_color"), ("draw", "icon_draw_color"), ("zoom", "icon_zoom_color"),
+        for (k, f) in [("capture", "icon_capture_color"), ("spot", "icon_spotlight_color"), ("draw", "icon_draw_color"), ("zoom", "icon_zoom_color"),
                        ("record", "icon_record_color"), ("settings", "icon_settings_color")] {
             if let url = Bundle.main.url(forResource: f, withExtension: "png"), let img = NSImage(contentsOf: url) { icons[k] = img }
         }
@@ -122,7 +124,7 @@ final class WidgetView: NSView {
         let iconSize = WidgetView.px(24)
         let onFill = NSColor(calibratedRed: 0x93 / 255, green: 0xC5 / 255, blue: 0xFD / 255, alpha: 1) // 켜짐: 하늘색 (Windows와 같음)
         let recFill = NSColor(calibratedRed: 0xFE / 255, green: 0xCA / 255, blue: 0xCA / 255, alpha: 1)
-        for (part, key, on) in [(Part.spot, "spot", spotOn), (.draw, "draw", drawOn), (.zoom, "zoom", zoomOn), (.record, "record", recOn), (.settings, "settings", false)] {
+        for (part, key, on) in [(Part.capture, "capture", false), (.zoom, "zoom", zoomOn), (.spot, "spot", spotOn), (.draw, "draw", drawOn), (.record, "record", recOn), (.settings, "settings", false)] {
             let r = rect(part)
             // 칸: 흰 바탕(켜지면 하늘색, 녹화 중은 연한 빨강) + 얇은 테두리. 누르는 동안은 옅게 어둡게.
             let edge = color(s.widgetColor).blended(withFraction: 0.5, of: isDark ? .white : .black) ?? .gray
@@ -154,6 +156,7 @@ final class WidgetView: NSView {
     static func accessibilityName(_ part: Part, spotOn: Bool, drawOn: Bool, zoomOn: Bool = false, recOn: Bool = false) -> String {
         switch part {
         case .grip: return "위젯 옮기기"
+        case .capture: return "화면 캡처"
         case .spot: return spotOn ? "하이라이트 끄기" : "하이라이트 켜기"
         case .draw: return drawOn ? "드로잉 끄기" : "드로잉 켜기"
         case .zoom: return zoomOn ? "라이브 줌 다음 단계" : "라이브 줌 켜기"
@@ -164,7 +167,7 @@ final class WidgetView: NSView {
     }
     override func isAccessibilityElement() -> Bool { false }
     override func accessibilityChildren() -> [Any]? {
-        [Part.grip, .spot, .draw, .zoom, .record, .settings, .close].map { part in
+        WidgetView.allParts.map { part in
             let e = WidgetPartElement()
             e.press = { [weak self] in if part != .grip { self?.onAction(part) } }
             e.setAccessibilityRole(part == .grip ? .handle : .button)
@@ -182,6 +185,7 @@ final class WidgetView: NSView {
         }
         switch part {
         case .grip: return "끌어서 옮기기"
+        case .capture: return "화면 캡처" + key("Capture") + " · 창을 클릭해 찍기 · 오른쪽 클릭: 메뉴"
         case .spot: return "마우스 하이라이트" + key("Spotlight")
         case .draw: return "드로잉" + key("Draw")
         case .zoom: return "라이브 줌" + key("Zoom") + " · 누를 때마다 1 → 2 → 3단계 → 끄기"
@@ -196,7 +200,7 @@ final class WidgetView: NSView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         removeAllToolTips()
-        for p in [Part.grip, .spot, .draw, .zoom, .record, .settings, .close] { addToolTip(rect(p), owner: tipOwner, userData: nil) }
+        for p in WidgetView.allParts { addToolTip(rect(p), owner: tipOwner, userData: nil) }
         trackingAreas.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(rect: bounds, options: [.activeAlways, .mouseMoved, .mouseEnteredAndExited, .inVisibleRect],
                                        owner: self, userInfo: nil))

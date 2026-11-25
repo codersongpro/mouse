@@ -610,7 +610,7 @@ struct SettingsView: View {
         Page {
             Card(title: "켜고 끄기 (칸을 누른 뒤 바꿀 키를 누르세요)") {
                 ForEach(hotkeysInKeyOrder, id: \.name) { h in hotkeyRow(h.name, def: h.def) }
-                Text("맥북 키보드에서는 F7~F10을 fn 키와 함께 누르세요. fn 없이 누르면 음악 재생·건너뛰기 같은 기능이 먼저 동작합니다.")
+                Text("맥북 키보드에서는 F6~F10을 fn 키와 함께 누르세요. fn 없이 누르면 방해 금지·음악 재생 같은 기능이 먼저 동작합니다. fn이 불편하면 ⌃⌥1~5 대체 키를 쓰세요.")
                     .font(.callout).foregroundStyle(.secondary)
                 Text("글자·숫자는 ⌃(Control)를 함께 눌러야 합니다. 다른 기능과 같은 키, 드로잉 중에 쓰는 키, macOS가 쓰는 조합은 쓸 수 없습니다. 다른 앱에서도 쓰는 키로 바꾸면 겹친다고 주황색 글로 알려 드립니다.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -619,8 +619,8 @@ struct SettingsView: View {
         }
     }
 
-    // 기본 키 순서(F7 라이브 줌 → F8 하이라이트 → F9 드로잉 → F10 녹화)로 보여 준다. 저장 순서(SettingsSchema)는 그대로 둔다.
-    private static let keyOrder = ["Zoom", "ZoomAlt", "Spotlight", "SpotlightAlt", "Draw", "DrawAlt", "Record", "RecordAlt", "RecordPause", "RecordArea"]
+    // 기본 키 순서(F6 캡처 → F7 라이브 줌 → F8 하이라이트 → F9 드로잉 → F10 녹화)로 보여 준다. 저장 순서(SettingsSchema)는 그대로 둔다.
+    private static let keyOrder = ["Capture", "CaptureAlt", "CaptureScreen", "CaptureArea", "Zoom", "ZoomAlt", "Spotlight", "SpotlightAlt", "Draw", "DrawAlt", "Record", "RecordAlt", "RecordPause", "RecordArea"]
     private var hotkeysInKeyOrder: [(name: String, def: String, macOnly: Bool)] {
         SettingsSchema.hotkeys.sorted { (Self.keyOrder.firstIndex(of: $0.name) ?? 99) < (Self.keyOrder.firstIndex(of: $1.name) ?? 99) }
     }
@@ -651,6 +651,7 @@ struct SettingsView: View {
 // settings.ini의 AHK 표기("^!1")를 맥 기호("⌃⌥1")로 보여 준다
 enum HotkeyDisplay {
     static func symbols(_ ahk: String) -> String {
+        if ahk.isEmpty { return "없음" } // 다른 기능과 겹쳐 비워 둔 단축키
         var mods = Set<Character>(), rest = Substring(ahk)
         while let c = rest.first, "^!+#".contains(c) { mods.insert(c); rest.removeFirst() }
         let order: [(Character, String)] = [("^", "⌃"), ("!", "⌥"), ("+", "⇧"), ("#", "⌘")]

@@ -35,7 +35,7 @@ HotkeyText(combo) {
 
 ShowUsageGuide(*) {
     global usageGui, showGuideOnStart, hotkeyCombos, MAKER_NAME, MAKER_SLOGAN
-    global ICON_SPOT_DARK_PATH, ICON_DRAW_DARK_PATH, ICON_ZOOM_DARK_PATH, ICON_SETTINGS_PATH, ICON_REC_PATH
+    global ICON_SPOT_DARK_PATH, ICON_DRAW_DARK_PATH, ICON_ZOOM_DARK_PATH, ICON_SETTINGS_PATH, ICON_REC_PATH, ICON_CAP_PATH
     if IsObject(usageGui)
         try usageGui.Destroy()
 
@@ -49,8 +49,12 @@ ShowUsageGuide(*) {
     g.SetFont("s10 norm c475569")
     g.AddText("x24 y+4 w520", "화면 오른쪽 아래 위젯의 버튼이나 단축키로 켜고 끕니다.")
 
-    ; ---- 위젯 버튼 네 개 ----
+    ; ---- 위젯 버튼 (F6 → F10 순서) ----
     rows := [
+        [ICON_CAP_PATH, "화면 캡처", HotkeyText(hotkeyCombos["Capture"])
+            , "창을 클릭해 찍고 편집 창에서 펜·도형·글자·모자이크를 넣습니다. 찍으면 바로 클립보드에 복사됩니다.`n"
+            . "전체 화면 " HotkeyText(hotkeyCombos["CaptureScreen"]) " · 구역 지정 " HotkeyText(hotkeyCombos["CaptureArea"])
+            . " · 저장 위치 사진\ClassZoom"],
         [ICON_ZOOM_DARK_PATH, "라이브 줌", HotkeyText(hotkeyCombos["Zoom"])
             , "누를 때마다 1단계 → 2단계 → 3단계 → 끄기. 영상도 그대로 움직입니다."],
         [ICON_SPOT_DARK_PATH, "마우스 하이라이트", HotkeyText(hotkeyCombos["Spotlight"])
@@ -72,7 +76,7 @@ ShowUsageGuide(*) {
         g.AddText("x232 y" (y - 1) " w120 h22 Center +0x200 BackgroundDBEAFE", r[3])
         g.SetFont("s9 norm c475569")
         g.AddText("x78 y" (y + 22) " w470", r[4])
-        y += 56
+        y += InStr(r[4], "`n") ? 72 : 56
     }
 
     ; ---- 확대 중 / 그리는 중 ----

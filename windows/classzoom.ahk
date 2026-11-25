@@ -105,6 +105,7 @@ FileInstall("..\shared\icon_draw_color.png", A_Temp "\cz_btn_draw.png", true)
 FileInstall("..\shared\icon_settings_color.png", A_Temp "\cz_btn_settings.png", true)
 FileInstall("..\shared\icon_zoom_color.png", A_Temp "\cz_btn_zoom.png", true)
 FileInstall("..\shared\icon_record_color.png", A_Temp "\cz_btn_record.png", true)
+FileInstall("..\shared\icon_capture_color.png", A_Temp "\cz_btn_capture.png", true)
 ; 설정 창의 "드로잉 모드 단축키 보기" 버튼이 띄우는 안내 그림. 아이콘과 달리 화면에 그대로 보여주기만
 ; 하므로 색을 입히거나 하지 않는다. (그림을 바꾸려면 shortcuts.png만 갈아끼우면 된다)
 FileInstall("shortcuts.png", A_Temp "\cz_shortcuts.png", true)
@@ -113,6 +114,7 @@ ICON_DRAW_DARK_PATH := A_Temp "\cz_btn_draw.png"
 ICON_SETTINGS_PATH := A_Temp "\cz_btn_settings.png"
 ICON_ZOOM_DARK_PATH := A_Temp "\cz_btn_zoom.png"
 ICON_REC_PATH := A_Temp "\cz_btn_record.png"
+ICON_CAP_PATH := A_Temp "\cz_btn_capture.png"
 SHORTCUT_IMAGE_PATH := A_Temp "\cz_shortcuts.png"
 
 ; ================= GDI+ 초기화 (PNG 아이콘 불러오기/색 입히기용) =================
@@ -128,12 +130,19 @@ DllCall("gdiplus\GdiplusStartup", "ptr*", &gdipToken, "ptr", gdipStartupInput, "
 ; 않아서 그때 지울 일이 없고, 드로잉 중에는 Delete와 Esc가 같은 일을 한다. 전역 단축키는
 ; 하나 등록할 때마다 그 키를 Windows 전체에서 빼앗으므로, 값어치가 낮은 것은 두지 않는 게 낫다.
 HOTKEY_DEFAULTS := Map("Spotlight", "F8", "Draw", "F9", "Zoom", "F7"
-    , "Record", "F10", "RecordPause", "^F10", "RecordArea", "^+F10")
+    , "Record", "F10", "RecordPause", "^F10", "RecordArea", "^+F10"
+    , "Capture", "F6", "CaptureArea", "^+F6", "CaptureScreen", "+F6")
 HOTKEY_LABELS := Map("Spotlight", "하이라이트", "Draw", "드로잉", "Zoom", "라이브 줌"
-    , "Record", "녹화", "RecordPause", "일시정지", "RecordArea", "영역 녹화")
-; 녹화 단축키는 앞 프로그램에 넘기지 않고 삼킨다. F10은 대부분의 프로그램에서 메뉴 막대를 여는
-; 키라서, 넘기면 녹화를 시작·정지할 때마다 앞 프로그램의 메뉴가 열린다.
-HOTKEY_NO_PASS := Map("Record", 1, "RecordPause", 1, "RecordArea", 1)
+    , "Record", "녹화", "RecordPause", "일시정지", "RecordArea", "영역 녹화"
+    , "Capture", "창 캡처", "CaptureArea", "구역 캡처", "CaptureScreen", "전체 캡처")
+; 녹화·캡처 단축키는 앞 프로그램에 넘기지 않고 삼킨다. F10은 대부분의 프로그램에서 메뉴 막대를 여는
+; 키라서, 넘기면 녹화를 시작·정지할 때마다 앞 프로그램의 메뉴가 열린다. F6도 한글에서 스타일 창을
+; 여는 키라서 넘기면 그 창이 떠서 캡처에 함께 찍힌다(2026-11-25 사용자 결정: 넘기지 않음).
+HOTKEY_NO_PASS := Map("Record", 1, "RecordPause", 1, "RecordArea", 1, "Capture", 1, "CaptureArea", 1, "CaptureScreen", 1)
+; 나중에 생긴 단축키(캡처 F6 등). 예전에 다른 기능을 이 키로 바꿔 둔 PC에서는 새 기본값이 그 키를 조용히
+; 가로채지 않도록, 켤 때 겹치면 이쪽을 비워 둔다(LoadSettings). 설정 → 단축키에서 다른 키로 정하면 된다.
+HOTKEY_LATER := ["Capture", "CaptureArea", "CaptureScreen"]
+hotkeyBlanked := [] ; 위 이유로 비워 둔 기능 이름 (켤 때 한 번 알린다)
 hotkeyCombos := Map()     ; 지금 설정된 조합 (settings.ini에서 불러옴)
 hotkeyRegistered := Map() ; 실제로 등록에 성공해 살아있는 조합 (해제할 때 필요)
 hotkeyApplying := false   ; 값을 되돌리느라 Change가 다시 불려 무한히 반복되는 것을 막는 빗장
@@ -232,6 +241,7 @@ PxToStep(px, basePx, ratio) {
 #Include zoom.ahk
 #Include guide.ahk ; 처음 실행할 때 뜨는 사용 방법 안내 창
 #Include record.ahk ; 화면 녹화 (도우미 classzoom-rec.exe + ffmpeg.exe)
+#Include capture.ahk ; 화면 캡처(F6) + 편집 창
 
 ; ================= 설정값 (settings.ini에서 불러옴, 없으면 기본값) =================
 ; spotOpacity는 0~100(%)로 저장/표시하고, 실제 WinSetTransparent에 쓸 때만 0~255로 환산한다.
@@ -241,7 +251,7 @@ LoadSettings() {
     global STEP_MAX, PEN_BASE_PX, PEN_STEP_RATIO, ERASER_BASE_PX, ERASER_STEP_RATIO
     global spotColor, clickColor, drawColor, laserHold, laserFade, laserGlow
     global clickEffectEnabled, clickSpeed, clickOpacity, CLICK_ANIM_INTERVAL, rclickEffectEnabled, rclickThickness, rclickSpeed, rclickOpacity, RCLICK_ANIM_INTERVAL, rclickColor, showWidget, showTrayIcons, hideCursorOnHighlight, widgetScale, widgetBgColor, widgetOpacity, widgetX, widgetY, widgetOnTop, boardMode, boardModeAsked
-    global HOTKEY_DEFAULTS, hotkeyCombos, DEFAULT_DRAW_STEP, DEFAULT_ERASER_STEP
+    global HOTKEY_DEFAULTS, hotkeyCombos, DEFAULT_DRAW_STEP, DEFAULT_ERASER_STEP, HOTKEY_LATER, hotkeyBlanked
     SpotSize := ReadIniNum("Highlight", "Size", 30, 200, 130)
     ; 예전 버전은 투명도를 0~255로 저장했었다. 그 값이 남아있어도 안전하게 0~100으로 잘려 들어가도록 한다.
     spotOpacity := ReadIniNum("Highlight", "Opacity", 0, 100, 40)
@@ -310,9 +320,28 @@ LoadSettings() {
         combo := IniRead(SETTINGS_PATH, "Hotkeys", name, def)
         hotkeyCombos[name] := IsSafeHotkey(combo) ? combo : def
     }
+    ; 새로 생긴 단축키가 다른 기능의 키와 겹치면 새 것을 비운다 (다른 기능의 키를 빼앗지 않게)
+    hotkeyBlanked := []
+    for name in HOTKEY_LATER
+        for other, combo in hotkeyCombos
+            if (other != name && hotkeyCombos[name] != "" && combo = hotkeyCombos[name]
+                && (!HotkeyIsLater(other) || HotkeyLaterIndex(other) < HotkeyLaterIndex(name))) {
+                hotkeyCombos[name] := ""
+                hotkeyBlanked.Push(name)
+                break
+            }
     ZoomLoadSettings() ; [Zoom] 단계 배율·부드럽게 (zoom.ahk)
     GuideLoadSettings() ; [Common] ShowGuide (guide.ahk)
     RecLoadSettings() ; [Record] (record.ahk)
+}
+
+HotkeyIsLater(name) => HotkeyLaterIndex(name) > 0
+HotkeyLaterIndex(name) {
+    global HOTKEY_LATER
+    for i, n in HOTKEY_LATER
+        if (n = name)
+            return i
+    return 0
 }
 
 ; 저장에 성공하면 참을 돌려준다.
@@ -4463,25 +4492,24 @@ OpenSettingsWindow(*) {
     lblTerms.OnEvent("Click", (*) => ShowTermsNotice(settingsGui.Hwnd))
 
     tabs.UseTab("단축키")
-    ; 기본 키 순서(F7 → F8 → F9 → F10)대로 늘어놓는다 — 위젯·안내문·랜딩페이지와 같은 순서
-    AddHotkeyRow(settingsGui, 50, "Zoom")
-    AddHotkeyRow(settingsGui, 90, "Spotlight")
-    AddHotkeyRow(settingsGui, 130, "Draw")
-    AddHotkeyRow(settingsGui, 170, "Record")
-    AddHotkeyRow(settingsGui, 210, "RecordPause")
-    AddHotkeyRow(settingsGui, 250, "RecordArea")
-    lblHotkeyHelp := settingsGui.AddText("x30 y284 w490 h44", "칸을 누른 뒤 원하는 키를 누르면 바뀝니다. 글자 키는 Ctrl이나 Alt와 함께 눌러야 합니다.`n다른 기능과 같은 키, Windows가 쓰는 키(Alt+Tab 등)는 쓸 수 없고, 다른 프로그램에서도 쓰는 키(F5, Ctrl+C 등)는 겹친다고 알려 드립니다.")
+    ; 기본 키 순서(F6 → F7 → F8 → F9 → F10)대로 늘어놓는다 — 위젯·안내문·랜딩페이지와 같은 순서
+    y := 44
+    for name in ["Capture", "CaptureScreen", "CaptureArea", "Zoom", "Spotlight", "Draw", "Record", "RecordPause", "RecordArea"] {
+        AddHotkeyRow(settingsGui, y, name)
+        y += 34
+    }
+    lblHotkeyHelp := settingsGui.AddText("x30 y" (y + 2) " w490 h44", "칸을 누른 뒤 원하는 키를 누르면 바뀝니다. 글자 키는 Ctrl이나 Alt와 함께 눌러야 합니다.`n다른 기능과 같은 키, Windows가 쓰는 키(Alt+Tab 등)는 쓸 수 없고, 다른 프로그램에서도 쓰는 키(F5, Ctrl+C 등)는 겹친다고 알려 드립니다.")
     lblHotkeyHelp.SetFont("s9 c999999")
 
     ; 드로잉 중에만 쓰는 키(도형·색·굵기·지우기)는 여기 글로 늘어놓지 않는다. **키보드 그림
     ; 한 장이 그 일을 더 잘한다** — 어느 키를 눌러야 하는지 자리로 바로 보이고, 지금 설정된
     ; 색까지 그림 아래에 함께 뜬다. 예전에는 열네 줄짜리 목록이 이 자리에 있었는데, 같은 내용을
     ; 두 군데 적어두면 한쪽만 고쳐져 어긋나기 마련이라 그림 쪽으로 몰았다.
-    btnShortcutGuide := settingsGui.AddButton("x130 y330 w220 h36", "드로잉 모드 단축키 보기")
+    btnShortcutGuide := settingsGui.AddButton("x130 y" (y + 50) " w220 h32", "드로잉 모드 단축키 보기")
     btnShortcutGuide.OnEvent("Click", ShowShortcutGuide)
-    chkCaps := settingsGui.AddCheckbox("x30 y388 w20 h20 " (capsHoldOn ? "Checked" : ""), "")
-    settingsGui.AddText("x54 y389 w460", "Caps Lock을 누르는 동안 드로잉 (떼면 그림은 화면에 남음)")
-    lblCapsHelp := settingsGui.AddText("x54 y411 w460 h36", "Caps Lock + V 끌기 = 강조 화살표.  지우기: Caps Lock + Delete.`n대문자 전환은 Shift + Caps Lock.")
+    chkCaps := settingsGui.AddCheckbox("x30 y" (y + 94) " w20 h20 " (capsHoldOn ? "Checked" : ""), "")
+    settingsGui.AddText("x54 y" (y + 95) " w460", "Caps Lock을 누르는 동안 드로잉 (떼면 그림은 화면에 남음)")
+    lblCapsHelp := settingsGui.AddText("x54 y" (y + 116) " w460 h36", "Caps Lock + V 끌기 = 강조 화살표.  지우기: Caps Lock + Delete.`n대문자 전환은 Shift + Caps Lock.")
     lblCapsHelp.SetFont("s9 c999999")
     chkCaps.OnEvent("Click", (ctrl, *) => SetCapsHold(ctrl.Value))
 
@@ -4952,6 +4980,7 @@ BuildWidget() {
     global hBtnSpotOff, hBtnSpotOn, hBtnDrawOff, hBtnDrawOn, hBtnSettings
     global btnZoomOff, btnZoomOn, hBtnZoomOff, hBtnZoomOn, ICON_ZOOM_DARK_PATH, zoomOn
     global btnRecOff, btnRecOn, hBtnRecOff, hBtnRecOn, ICON_REC_PATH, recState, CHIP_REC_FILL
+    global btnCap, hBtnCap, ICON_CAP_PATH
     global widgetW, widgetH, widgetScale, widgetBgColor, widgetX, widgetY
     global CHIP_SIZE, CHIP_CORNER, CHIP_ICON_SIZE, ICON_OFF_COLOR, TRAY_ON_COLOR, ICON_KEEP_COLOR, CHIP_OFF_FILL, CHIP_ON_FILL
     global ICON_SPOT_DARK_PATH, ICON_DRAW_DARK_PATH, ICON_SETTINGS_PATH
@@ -4961,7 +4990,7 @@ BuildWidget() {
     keepX := "", keepY := ""
     if IsSet(widget) && widget {
         try WinGetPos(&keepX, &keepY, , , widget)
-        for h in [hBtnSpotOff, hBtnSpotOn, hBtnDrawOff, hBtnDrawOn, hBtnSettings, hBtnZoomOff, hBtnZoomOn, hBtnRecOff, hBtnRecOn]
+        for h in [hBtnSpotOff, hBtnSpotOn, hBtnDrawOff, hBtnDrawOn, hBtnSettings, hBtnZoomOff, hBtnZoomOn, hBtnRecOff, hBtnRecOn, hBtnCap]
             try DllCall("DeleteObject", "ptr", h)
         try widget.Destroy()
         ; 없앤 창을 가리키는 채로 두면, 다시 만들기 전에 들어온 클릭이 죽은 창을 건드린다.
@@ -4978,14 +5007,15 @@ BuildWidget() {
     gap := WidgetPx(4)   ; 칩 사이 간격
     ; 전자칠판 모드는 **세로 막대**에 확대 +/− 칸이 더 있다 (손이 닿는 화면 옆면 아래쪽에 세워 둔다)
     vertical := boardMode
-    order := vertical ? ["zoom", "zplus", "zminus", "spot", "draw", "rec", "settings"] : ["spot", "draw", "zoom", "rec", "settings"]
+    ; 기본 단축키 순서 F6 캡처 → F7 라이브 줌 → F8 하이라이트 → F9 드로잉 → F10 녹화 → 설정 (안내문·랜딩페이지와 같은 순서)
+    order := vertical ? ["cap", "zoom", "zplus", "zminus", "spot", "draw", "rec", "settings"] : ["cap", "zoom", "spot", "draw", "rec", "settings"]
     n := order.Length
     if vertical {
         widgetW := chip + pad * 2
         widgetH := top * 2 + narrow * 2 + chip * n + gap * (n + 1)
     } else {
         widgetH := chip + top * 2
-        widgetW := pad * 2 + narrow * 2 + chip * n + gap * (n + 1) ; 칩 5개: 하이라이트·드로잉·라이브 줌·녹화·설정
+        widgetW := pad * 2 + narrow * 2 + chip * n + gap * (n + 1) ; 칩 6개: 캡처·라이브 줌·하이라이트·드로잉·녹화·설정
     }
 
     hBtnSpotOff := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_SPOT_DARK_PATH, icon, ICON_KEEP_COLOR)
@@ -4997,6 +5027,7 @@ BuildWidget() {
     hBtnZoomOn := RenderButtonBitmap(CHIP_ON_FILL, widgetBgColor, chip, corner, ICON_ZOOM_DARK_PATH, icon, ICON_KEEP_COLOR)
     hBtnRecOff := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_REC_PATH, icon, ICON_KEEP_COLOR)
     hBtnRecOn := RenderButtonBitmap(CHIP_REC_FILL, widgetBgColor, chip, corner, ICON_REC_PATH, icon, ICON_KEEP_COLOR)
+    hBtnCap := RenderButtonBitmap(CHIP_OFF_FILL, widgetBgColor, chip, corner, ICON_CAP_PATH, icon, ICON_KEEP_COLOR)
 
     widget := Gui((WidgetWantsTop() ? "+AlwaysOnTop " : "") "-Caption +ToolWindow", "ClassZoom")
     widget.BackColor := HexColor(widgetBgColor)
@@ -5012,6 +5043,10 @@ BuildWidget() {
     for kind in order {
         slot := WidgetSlot(&p, chip, vertical, chip, pad, top, gap)
         switch kind {
+        case "cap":
+            ; 캡처 버튼 (capture.ahk). 누르면 창 캡처, 오른쪽 클릭하면 구역·전체 화면 메뉴
+            btnCap := widget.AddPicture(slot, "HBITMAP:" hBtnCap)
+            AddWidgetTip(btnCap, "cap")
         case "spot":
             btnSpotOff := widget.AddPicture(slot (spotlightOn ? " Hidden" : ""), "HBITMAP:" hBtnSpotOff)
             btnSpotOn := widget.AddPicture(slot (spotlightOn ? "" : " Hidden"), "HBITMAP:" hBtnSpotOn)
@@ -5054,6 +5089,7 @@ BuildWidget() {
     for ctrl in [btnDrawOff, btnDrawOn]
         ctrl.OnEvent("Click", ToggleDrawFromWidget) ; 끌 때는 그려둔 것도 지운다 (Esc와 같은 효과)
     btnSettings.OnEvent("Click", OpenSettingsWindow)
+    btnCap.OnEvent("Click", CapWindow)
     for ctrl in [btnZoomOff, btnZoomOn]
         ctrl.OnEvent("Click", ToggleZoom)
     for ctrl in [btnRecOff, btnRecOn]
@@ -5349,7 +5385,16 @@ ClampWidgetIntoScreen() {
 }
 
 WidgetContextMenu(g, ctrl, *) {
-    global btnRecOff, btnRecOn, recState, boardMode
+    global btnRecOff, btnRecOn, recState, boardMode, btnCap
+    ; 캡처 버튼: 창 / 구역 지정 / 전체 화면
+    if (IsObject(ctrl) && ctrl = btnCap) {
+        m := Menu()
+        m.Add("창 캡처" WidgetTipKey("Capture"), CapWindow)
+        m.Add("구역 지정 캡처" WidgetTipKey("CaptureArea"), CapArea)
+        m.Add("전체 화면 캡처" WidgetTipKey("CaptureScreen"), CapScreen)
+        m.Show()
+        return
+    }
     ; 녹화 버튼이 아닌 곳: 전자칠판 모드 켜고 끄기 (칠판에서는 위젯을 길게 누르면 Windows가 오른쪽 클릭으로 보낸다)
     if !(IsObject(ctrl) && (ctrl = btnRecOff || ctrl = btnRecOn)) {
         m := Menu()
@@ -5746,6 +5791,7 @@ WidgetTipText(kind) {
     case "grip": return "끌어서 옮기기"
     case "spot": return "마우스 하이라이트" WidgetTipKey("Spotlight")
     case "draw": return "드로잉" WidgetTipKey("Draw")
+    case "cap": return "화면 캡처" WidgetTipKey("Capture") " · 창을 클릭해 찍기 · 오른쪽 클릭: 구역 · 전체 화면"
     case "zoom": return "라이브 줌" WidgetTipKey("Zoom") " · 누를 때마다 1 → 2 → 3단계 → 끄기"
     case "zplus": return "확대 단계 올리기"
     case "zminus": return "확대 단계 내리기 (1단계에서 누르면 끄기)"
@@ -5821,12 +5867,19 @@ SetWidgetVisible(showWidget) ; 트레이 메뉴 체크 표시까지 시작 상�
 ; ================= 단축키 =================
 ; 이름 → 실제로 실행할 동작. 설정 창에서 조합을 바꿔도 동작은 그대로이므로 여기서 한 번만 묶는다.
 HOTKEY_ACTIONS := Map("Spotlight", ToggleSpotlight, "Draw", ToggleDraw, "Zoom", ToggleZoom
-    , "Record", RecToggle, "RecordPause", RecPauseToggle, "RecordArea", RecToggleArea)
+    , "Record", RecToggle, "RecordPause", RecPauseToggle, "RecordArea", RecToggleArea
+    , "Capture", CapWindow, "CaptureArea", CapArea, "CaptureScreen", CapScreen)
 
 ; 저장해둔 조합으로 전역 단축키를 켠다. 다른 프로그램이 이미 쓰는 조합이면 등록에 실패하는데,
 ; 시작하자마자 오류 창을 띄우면 수업 중에 곤란하므로 조용히 건너뛴다(위젯과 트레이는 그대로 동작).
 for name, combo in hotkeyCombos
     RegisterHotkey(name, combo)
+if hotkeyBlanked.Length {
+    blankedText := ""
+    for name in hotkeyBlanked
+        blankedText .= (blankedText = "" ? "" : ", ") HOTKEY_LABELS[name]
+    TrayTip("다른 기능이 이미 쓰는 키라서 " blankedText " 단축키를 비워 두었습니다.`n설정 → 단축키 탭에서 정해 주세요.", "ClassZoom", "Iconi")
+}
 
 ; ================= 개발용: 소스를 고치고 바로 확인하기 =================
 ; 소스(.ahk)로 실행 중일 때만 켜지는 단축키다. 파일을 고쳐 저장한 뒤 Ctrl+Alt+R을 누르면

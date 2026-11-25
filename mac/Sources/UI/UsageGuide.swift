@@ -39,6 +39,7 @@ struct UsageGuideView: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 10) {
+                row("icon_capture_color", "화면 캡처", "\(key("Capture")) · \(key("CaptureAlt"))", "창을 클릭해 찍고 펜·도형·글자·모자이크를 넣습니다. 바로 클립보드에 복사되고 사진 › ClassZoom에 저장합니다. 전체 화면 \(key("CaptureScreen")) · 구역 지정 \(key("CaptureArea"))")
                 row("icon_zoom_color", "라이브 줌", "\(key("Zoom")) · \(key("ZoomAlt"))", "누를 때마다 1단계 → 2단계 → 3단계 → 끄기. 화면은 고정되고 커서만 움직입니다.")
                 row("icon_spotlight_color", "마우스 하이라이트", "\(key("Spotlight")) · \(key("SpotlightAlt"))", "커서 주위를 원하는 색의 원으로 밝히고(색은 설정에서 고름), 클릭하면 원이 오므라듭니다.")
                 row("icon_draw_color", "드로잉", "\(key("Draw")) · \(key("DrawAlt"))", "화면 위에 그립니다. 오른쪽 ⌥를 누르고 있는 동안에도 그려집니다. esc는 지우고 끄기.")
@@ -51,7 +52,7 @@ struct UsageGuideView: View {
                 section("녹화", [(key("RecordPause"), "일시정지 · 계속"), (key("RecordArea"), "영역 골라 녹화"), ("표시창", "일시정지 · 정지 버튼")])
             }
             section("드로잉 중", [("오른쪽 ⌥ + 끌기", "F9 없이 바로 (떼면 그림은 남음)"), ("⌃ / ⇧ + 끌기", "네모 / 원"), ("Z / X / C + 끌기", "직선 / 물결 / 화살표"), ("V + 끌기", "강조 화살표"), ("1 ~ 9, 0", "색 바꾸기, 기본 색"), ("⌥ + 끌기", "지우개"), ("⌘Z / delete", "되돌리기 / 전부 지우기")])
-            Text("라이브 줌과 화면 녹화는 처음 쓸 때 화면 기록 권한을 묻습니다. 시스템 설정 › 개인정보 보호 및 보안 › 화면 및 시스템 오디오 녹화에서 ClassZoom을 켜 주세요.")
+            Text("화면 캡처·라이브 줌·화면 녹화는 처음 쓸 때 화면 기록 권한을 묻습니다. 시스템 설정 › 개인정보 보호 및 보안 › 화면 및 시스템 오디오 녹화에서 ClassZoom을 켜 주세요.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("드로잉 단축키 전체 보기", action: onShowKeyboard)
