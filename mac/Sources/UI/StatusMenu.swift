@@ -65,7 +65,7 @@ extension AppDelegate {
         let ver = NSMenuItem(title: "ClassZoom \(AppInfo.displayVersion)", action: nil, keyEquivalent: "")
         ver.isEnabled = false
         sub.addItem(ver)
-        for (t, a) in [("사용 방법", #selector(menuGuide)), ("진단 정보 복사", #selector(menuCopyDiag))] {
+        for (t, a) in [("사용 방법", #selector(menuGuide)), ("저작권 및 이용 약관", #selector(menuTerms)), ("진단 정보 복사", #selector(menuCopyDiag))] {
             let i = NSMenuItem(title: t, action: a, keyEquivalent: "")
             i.target = self
             sub.addItem(i)
@@ -91,6 +91,7 @@ extension AppDelegate {
     @objc func menuRecArea() { recorder.toggle(area: true) }
     @objc func menuRecPause() { recorder.pauseToggle() }
     @objc func menuGuide() { guide.show() }
+    @objc func menuTerms() { Notice.show(Notice.terms()) }
     @objc func menuDraw() { draw.toggle() }
     @objc func menuWidget() { Settings.shared.showWidget.toggle() }
     @objc func menuTray() { Settings.shared.showTrayIcons.toggle() }

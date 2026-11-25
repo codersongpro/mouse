@@ -67,21 +67,49 @@ RELEASES_URL := "https://github.com/codersongpro/mouse/releases/latest"
 AUTHOR_URL := "https://songpro.app" ; 설정 창의 홈페이지 링크
 DOWNLOAD_PAGE_URL := "https://songpro.app/#download" ; "받으러 가기"는 랜딩페이지의 다운로드 칸으로 연다
 
-; ---- 만든 사람 · 저작권 (설정 창 일반 탭, 사용 방법 창, 이용 안내에 쓴다) ----
+; ---- 만든 사람 · 저작권 (설정 창 일반 탭, 사용 방법 창, 이용 약관에 쓴다) ----
 MAKER_NAME := "송동석 (Songpro / Dustin)"
 MAKER_ROLE := "AI Product Builder · Educator · Data Analyst"
 MAKER_SLOGAN := "즐거움은 더하고, 불편함은 덜고."
 MAKER_COPYRIGHT := "© 2026 송동석"
 
-ShowTermsNotice(owner := 0, *) {
-    global MAKER_NAME
-    MsgBox("ClassZoom © 2026 " MAKER_NAME "`n`n"
-        . "· MIT 라이선스로 배포하는 무료 프로그램입니다. 누구나 사용·복사·수정·배포할 수 있습니다.`n`n"
-        . "· 다시 배포할 때는 저작권 표시와 LICENSE 파일을 함께 넣어 주세요.`n`n"
-        . "· 이 프로그램은 있는 그대로 제공되며, 사용 중 생긴 문제에 대해 만든 사람은 책임지지 않습니다.`n`n"
-        . "· 개인정보를 수집하거나 외부로 보내지 않습니다. 인터넷은 설정 창을 열 때 새 버전을 확인하는 데에만 씁니다(버전 파일 1개 읽기).`n`n"
-        . "· 화면 녹화에는 FFmpeg(LGPL 2.1)을 그대로 넣어 씁니다. 라이선스 전문은 처음 녹화할 때 %LOCALAPPDATA%\ClassZoom\engine 폴더에 함께 꺼내지며, zip 판의 licenses 폴더에도 있습니다. FFmpeg 소스: ffmpeg.org"
-        , "ClassZoom — 저작권 및 이용 안내", "Iconi" (owner ? " Owner" owner : ""))
+TERMS_URL := "https://songpro.app/terms" ; 랜딩페이지의 저작권 및 이용 약관 (site/terms.html과 같은 내용)
+
+; 저작권 및 이용 약관 창 (트레이 메뉴 · 설정 › 일반 · 사용 방법 창에서 연다). 글이 길어 스크롤되는 칸에 담는다.
+termsGui := ""
+ShowTermsNotice(owner := 0) {
+    global MAKER_NAME, TERMS_URL, termsGui
+    if IsObject(termsGui)
+        try termsGui.Destroy()
+    text := "ClassZoom © 2026 " MAKER_NAME "`r`n시행일 2026년 11월 25일`r`n`r`n"
+        . "1. 저작권`r`nClassZoom(Windows 판·macOS 판·홈페이지)의 저작권은 만든 사람 " MAKER_NAME "에게 있습니다.`r`n`r`n"
+        . "2. 라이선스`r`nMIT 라이선스로 배포하는 무료 프로그램입니다. 개인·학교·기관 누구나 비용 없이 사용·복사·수정·배포합니다. "
+        . "다시 배포하거나 고친 판을 배포할 때는 저작권 표시와 LICENSE 파일(라이선스 전문)을 함께 넣어야 합니다.`r`n`r`n"
+        . "3. 이용 조건`r`n· 수업·강의·업무 등 쓰는 목적에 제한이 없습니다.`r`n"
+        . "· 화면 캡처·녹화로 만든 그림과 영상의 권리와 책임은 그것을 만든 사용자에게 있습니다.`r`n"
+        . "· 다른 사람의 저작물이나 학생 이름·얼굴 같은 개인정보가 담긴 화면을 공유할 때는 저작권법·개인정보 보호법과 학교·기관의 규정을 지켜 주세요. 편집 창의 모자이크로 가린 뒤 공유하기를 권합니다.`r`n`r`n"
+        . "4. 보증하지 않음과 책임의 한계`r`n있는 그대로 제공되며 어떤 보증도 하지 않습니다. 쓰다 생긴 자료 손실, 장애, 그 밖의 손해에 대해 만든 사람은 책임지지 않습니다.`r`n`r`n"
+        . "5. 개인정보`r`n· 개인정보를 수집하거나 외부로 보내지 않습니다. 회원 가입·로그인도 없습니다.`r`n"
+        . "· 인터넷은 설정 창을 열 때 새 버전을 확인하는 데에만 씁니다(버전 파일 1개 읽기).`r`n"
+        . "· 캡처한 그림, 녹화한 영상, 설정 파일은 이 컴퓨터에만 저장됩니다.`r`n`r`n"
+        . "6. 함께 쓰는 공개 소프트웨어`r`n· FFmpeg (GNU LGPL 2.1): 화면 녹화에 수정하지 않고 그대로 씁니다. 라이선스 전문은 처음 녹화할 때 %LOCALAPPDATA%\ClassZoom\engine 폴더에 꺼내지고, zip 판의 licenses 폴더에도 있습니다. 소스: ffmpeg.org`r`n"
+        . "· AutoHotkey v2: Windows 판을 만든 도구입니다. autohotkey.com`r`n`r`n"
+        . "7. 문의`r`nsongpro.app 또는 GitHub 이슈(github.com/codersongpro/mouse/issues)"
+    g := Gui("+AlwaysOnTop -MinimizeBox -MaximizeBox" (owner ? " +Owner" owner : ""), "ClassZoom — 저작권 및 이용 약관")
+    termsGui := g
+    g.BackColor := "FFFFFF"
+    g.SetFont("s14 bold c1E293B", "Malgun Gothic")
+    g.AddText("x20 y16 w520", "저작권 및 이용 약관")
+    g.SetFont("s10 norm c334155")
+    ed := g.AddEdit("x20 y+10 w520 h340 ReadOnly -WantReturn +VScroll -E0x200 BackgroundF8FAFC", text)
+    btnWeb := g.AddButton("x20 y+14 w140 h30", "웹에서 보기")
+    btnWeb.OnEvent("Click", (*) => Run(TERMS_URL))
+    btnOk := g.AddButton("x420 yp w120 h30 Default", "확인")
+    btnOk.OnEvent("Click", (*) => g.Destroy())
+    g.OnEvent("Close", (*) => g.Destroy())
+    g.OnEvent("Escape", (*) => g.Destroy())
+    g.Show("AutoSize Center")
+    ControlFocus(btnOk) ; 글 칸에 커서가 깜빡이지 않게
 }
 updateReq := "", updateDeadline := 0, updateUrl := RELEASES_URL, lblUpdate := ""
 
@@ -4487,7 +4515,7 @@ OpenSettingsWindow(*) {
     lblHome := settingsGui.AddText("x186 y436 w100 Center", "songpro.app")
     lblHome.SetFont("s9 c0066CC underline")
     lblHome.OnEvent("Click", (*) => Run(AUTHOR_URL))
-    lblTerms := settingsGui.AddText("x284 y436 w80 Center", "이용 안내")
+    lblTerms := settingsGui.AddText("x284 y436 w100 Center", "이용 약관")
     lblTerms.SetFont("s9 c0066CC underline")
     lblTerms.OnEvent("Click", (*) => ShowTermsNotice(settingsGui.Hwnd))
 
@@ -5477,6 +5505,7 @@ SetWidgetVisible(show) {
 
 A_TrayMenu.Delete()
 A_TrayMenu.Add("사용 방법", ShowUsageGuide)
+A_TrayMenu.Add("저작권 및 이용 약관", (*) => ShowTermsNotice())
 A_TrayMenu.Add("설정...", OpenSettingsWindow)
 A_TrayMenu.Add(TRAY_WIDGET_ITEM, (*) => SetWidgetVisible(!showWidget))
 A_TrayMenu.Add("종료", (*) => ExitApp())

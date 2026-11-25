@@ -71,8 +71,11 @@ struct UsageGuideView: View {
                 Toggle("다음부터 보지 않기", isOn: $dontShow)
                 Button("시작하기") { onClose(dontShow) }.keyboardShortcut(.defaultAction)
             }
-            Text("만든 사람 \(Maker.name) · \(Maker.slogan)")
-                .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+            HStack {
+                Text("만든 사람 \(Maker.name) · \(Maker.slogan)").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("저작권 · 이용 약관") { Notice.show(Notice.terms()) }.buttonStyle(.link).font(.caption)
+            }
         }
         .padding(24)
         .frame(width: 600)
