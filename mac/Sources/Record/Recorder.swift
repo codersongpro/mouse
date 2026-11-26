@@ -63,7 +63,7 @@ import ScreenCaptureKit
         guard s.recAskQuality else { return true }
         let a = NSAlert()
         a.messageText = "어떤 화질로 녹화할까요?"
-        a.informativeText = "1080p는 선명하고 파일 크기도 알맞습니다. 720p는 파일이 작고, 원본은 화면 그대로라 가장 선명합니다."
+        a.informativeText = "1080p는 선명하고 파일 크기도 알맞습니다. 720p는 파일이 작고 원본은 화면 그대로라 가장 선명합니다."
         a.addButton(withTitle: "1080p (기본)")
         a.addButton(withTitle: "720p")
         a.addButton(withTitle: "원본 해상도")

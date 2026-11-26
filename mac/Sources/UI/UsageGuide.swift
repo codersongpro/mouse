@@ -52,7 +52,7 @@ struct UsageGuideView: View {
             VStack(alignment: .leading, spacing: 10) {
                 row("icon_capture_color", "화면 캡처", "\(key("Capture")) · \(key("CaptureAlt"))", "창을 클릭하거나 구역을 끌어서 찍고 펜·도형·글자·모자이크를 넣습니다. 바로 클립보드에 복사되고 사진 › ClassZoom에 저장합니다. 전체 화면 \(key("CaptureScreen")) · 구역 지정 \(key("CaptureArea")) · 스크롤 캡처 \(key("CaptureScroll"))")
                 row("icon_zoom_color", "라이브 줌", "\(key("Zoom")) · \(key("ZoomAlt"))", "누를 때마다 1단계 → 2단계 → 3단계 → 끄기. 화면은 고정되고 커서만 움직입니다.")
-                row("icon_spotlight_color", "마우스 하이라이트", "\(key("Spotlight")) · \(key("SpotlightAlt"))", "커서 주위를 원하는 색의 원으로 밝히고(색은 설정에서 고름), 클릭하면 원이 오므라듭니다.")
+                row("icon_spotlight_color", "마우스 하이라이트", "\(key("Spotlight")) · \(key("SpotlightAlt"))", "커서 주위를 원하는 색의 원으로 밝히고(색은 설정에서 고름) 클릭하면 원이 오므라듭니다.")
                 row("icon_draw_color", "드로잉", "\(key("Draw")) · \(key("DrawAlt"))", "화면 위에 그립니다. 오른쪽 ⌥를 누르고 있는 동안에도 그려집니다. esc는 지우고 끄기.")
                 row("icon_record_color", "화면 녹화", "\(key("Record")) · \(key("RecordAlt"))", "3·2·1 뒤 녹화하고 다시 누르면 동영상 › ClassZoom 폴더에 저장합니다.")
                 row("icon_settings_color", "설정", "위젯 버튼", "색·굵기·확대 배율·녹화 소리를 바꿉니다. 단축키도 원하는 키로 바꿀 수 있습니다(단축키 탭).")

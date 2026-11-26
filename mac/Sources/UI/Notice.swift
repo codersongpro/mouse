@@ -72,7 +72,7 @@ enum Notice {
         default: break
         }
         if case .blocked = e {
-            cause = "설정 파일이 읽을 수 없는 상태인데 복사본을 만들지 못해서, 원래 파일을 지키려고 저장하지 않았습니다."
+            cause = "설정 파일이 읽을 수 없는 상태인데 복사본을 만들지 못해서 원래 파일을 지키려고 저장하지 않았습니다."
         }
         var detail = "설정 파일: \(tilde(Settings.path))"
         if let ns { detail += "\n오류: \(ns.localizedDescription) (\(ns.domain) \(ns.code))" }
@@ -97,8 +97,8 @@ enum Notice {
 
     static func unreadable(reason: String, backup: URL?) -> NoticeContent {
         let reassure = backup != nil
-            ? "원래 파일은 지우지 않았고, 복사본(\(backup!.lastPathComponent))을 같은 폴더에 남겼습니다. 설정 창에서 [저장]을 누르기 전까지는 원래 파일을 건드리지 않습니다."
-            : "복사본을 만들지 못해서, 원래 파일은 그대로 두고 [저장]도 막아 두었습니다."
+            ? "원래 파일은 지우지 않았고 복사본(\(backup!.lastPathComponent))을 같은 폴더에 남겼습니다. 설정 창에서 [저장]을 누르기 전까지는 원래 파일을 건드리지 않습니다."
+            : "복사본을 만들지 못해서 원래 파일은 그대로 두고 [저장]도 막아 두었습니다."
         return NoticeContent(
             title: "설정 파일을 읽지 못했습니다",
             body: ["설정 파일(settings.ini)이 손상됐거나 알 수 없는 형식이라 읽을 수 없었습니다.",
@@ -122,9 +122,9 @@ enum Notice {
             title: "ClassZoom을 시작했습니다",
             body: ["• 위젯은 화면 오른쪽 아래에 있습니다. 잡고 끌어서 옮길 수 있습니다.",
                    "• 화면 맨 위 메뉴 막대에 아이콘이 있습니다. 설정, 도움말, 종료는 여기서 합니다.",
-                   "• 강조는 F8, 드로잉은 F9입니다. 맥북에서는 fn 키와 함께(fn+F8, fn+F9) 누르세요.",
-                   "• fn 없이 쓰려면 ⌃⌥1(강조), ⌃⌥2(드로잉)을 누르세요.",
-                   "이 안내는 메뉴 막대 아이콘 › 도움말 › 처음 안내 다시 보기에서 다시 볼 수 있습니다."])
+                   "• 마우스 하이라이트는 F8, 드로잉은 F9입니다. 맥북에서는 fn 키와 함께(fn+F8, fn+F9) 누르세요.",
+                   "• fn 없이 쓰려면 ⌃⌥1(하이라이트), ⌃⌥2(드로잉)을 누르세요.",
+                   "사용 방법은 메뉴 막대 아이콘 › 도움말 › 사용 방법에서 언제든 다시 봅니다."])
     }
 
     // ---------- 저작권 및 이용 약관 (랜딩페이지 /terms, Windows 판과 같은 내용) ----------
@@ -186,7 +186,7 @@ enum Notice {
     static func loginNeedsApproval() -> NoticeContent {
         NoticeContent(
             title: "시스템 설정에서 한 번 허용해 주세요",
-            body: ["로그인 시 실행을 등록했지만, macOS가 사용자의 허용을 기다리고 있습니다.",
+            body: ["로그인 시 실행을 등록했지만 macOS가 사용자의 허용을 기다리고 있습니다.",
                    "시스템 설정 › 일반 › 로그인 항목에서 ClassZoom을 켜 주세요."],
             buttons: [("로그인 항목 열기", { LoginItem.openSystemSettings() })])
     }

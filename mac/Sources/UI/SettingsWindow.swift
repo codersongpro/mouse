@@ -26,12 +26,12 @@ enum SettingsLayout {
             Field(id: "Highlight.Color", label: "색상"),
             Field(id: "Highlight.Size", label: "크기", suffix: "px", step: 5),
             Field(id: "Highlight.Opacity", label: "투명도", suffix: "%", step: 5)]),
-        Panel(title: "포커스 클릭효과 (좌클릭)", toggle: "Highlight.ClickEffect", fields: [
+        Panel(title: "포커스 클릭 효과 (좌클릭)", toggle: "Highlight.ClickEffect", fields: [
             Field(id: "Highlight.ClickColor", label: "색상"),
             Field(id: "Highlight.RingThickness", label: "테두리 굵기"),
             Field(id: "Highlight.ClickOpacity", label: "투명도", suffix: "%", step: 5),
             Field(id: "Highlight.ClickSpeed", label: "빠르기")]),
-        Panel(title: "포커스 클릭효과 (우클릭)", toggle: "Highlight.RClickEffect", fields: [
+        Panel(title: "포커스 클릭 효과 (우클릭)", toggle: "Highlight.RClickEffect", fields: [
             Field(id: "Highlight.RClickColor", label: "색상"),
             Field(id: "Highlight.RClickThickness", label: "테두리 굵기"),
             Field(id: "Highlight.RClickOpacity", label: "투명도", suffix: "%", step: 5),
@@ -527,7 +527,7 @@ struct SettingsView: View {
     private var focus: some View {
         Page {
             ForEach(SettingsLayout.focus, id: \.title) { GroupBoxView(g: $0) }
-            Text("강조 중에는 마우스 화살표를 숨기고, 원 한가운데에 작은 십자를 보여 줍니다.")
+            Text("하이라이트 중에는 마우스 화살표를 숨기고, 원 한가운데에 작은 십자를 보여 줍니다.")
                 .font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -563,7 +563,7 @@ struct SettingsView: View {
         Page {
             GroupBoxView(g: SettingsLayout.zoom)
             Card(title: "부드럽게 확대·축소", toggle: flagBinding(SettingsLayout.zoomSmooth)) {
-                Text("끄면 단계가 바로 바뀝니다. 확대 중 ⌃ + 휠로 단계를 오르내리고 esc로 끕니다. 화면은 고정되고, 커서를 가장자리 쪽으로 가져가면 그쪽으로 이동합니다.")
+                Text("끄면 단계가 바로 바뀝니다. 확대 중 ⌃ + 휠로 단계를 오르내리고 esc로 끕니다. 화면은 고정되고 커서를 가장자리 쪽으로 가져가면 그쪽으로 이동합니다.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             GroupBoxView(g: SettingsLayout.record)
@@ -575,7 +575,7 @@ struct SettingsView: View {
                 }
                 .labelsHidden().pickerStyle(.segmented)
                 Toggle("녹화를 시작할 때마다 화질 묻기", isOn: flagBinding("Record.AskQuality"))
-                Text("1080p는 선명하고 파일 크기도 알맞습니다. 720p는 파일이 작고, 원본은 화면 그대로라 가장 선명합니다.")
+                Text("1080p는 선명하고 파일 크기도 알맞습니다. 720p는 파일이 작고 원본은 화면 그대로라 가장 선명합니다.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Card(title: "녹음") {
@@ -599,7 +599,7 @@ struct SettingsView: View {
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Card(title: "메뉴 막대 아이콘을 위젯처럼 표시", toggle: flagBinding(SettingsLayout.trayShow)) {
-                Text("켜면 메뉴 막대에 위젯처럼 강조 · 드로잉 · 설정이 테두리로 묶여 보입니다. 강조·드로잉은 누를 때마다 켜고 끄고(켜진 것은 파랑), 설정을 누르면 메뉴가 열립니다.")
+                Text("켜면 메뉴 막대에 위젯처럼 하이라이트 · 드로잉 · 설정이 테두리로 묶여 보입니다. 하이라이트·드로잉은 누를 때마다 켜고 끄고(켜진 것은 파랑) 설정을 누르면 메뉴가 열립니다.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }

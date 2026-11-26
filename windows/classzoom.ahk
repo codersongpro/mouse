@@ -92,7 +92,7 @@ ShowTermsNotice(owner := 0) {
         . "5. 개인정보`r`n· 개인정보를 수집하거나 외부로 보내지 않습니다. 회원 가입·로그인도 없습니다.`r`n"
         . "· 인터넷은 설정 창을 열 때 새 버전을 확인하는 데에만 씁니다(버전 파일 1개 읽기).`r`n"
         . "· 캡처한 그림, 녹화한 영상, 설정 파일은 이 컴퓨터에만 저장됩니다.`r`n`r`n"
-        . "6. 함께 쓰는 공개 소프트웨어`r`n· FFmpeg (GNU LGPL 2.1): 화면 녹화에 수정하지 않고 그대로 씁니다. 라이선스 전문은 처음 녹화할 때 %LOCALAPPDATA%\ClassZoom\engine 폴더에 꺼내지고, zip 판의 licenses 폴더에도 있습니다. 소스: ffmpeg.org`r`n"
+        . "6. 함께 쓰는 공개 소프트웨어`r`n· FFmpeg (GNU LGPL 2.1): 화면 녹화에 수정하지 않고 그대로 씁니다. 라이선스 전문은 처음 녹화할 때 %LOCALAPPDATA%\ClassZoom\engine 폴더에 꺼내지고 zip 판의 licenses 폴더에도 있습니다. 소스: ffmpeg.org`r`n"
         . "· AutoHotkey v2: Windows 판을 만든 도구입니다. autohotkey.com`r`n`r`n"
         . "7. 문의`r`nsongpro.app"
     g := Gui("+AlwaysOnTop -MinimizeBox -MaximizeBox" (owner ? " +Owner" owner : ""), "ClassZoom — 저작권 및 이용 약관")
@@ -4325,7 +4325,7 @@ OpenSettingsWindow(*) {
     ; --- 왼쪽 클릭 효과 --- (켜고 끄는 체크박스를 상자 제목 자리에 얹는다)
     settingsGui.AddGroupBox("x22 y212 w436 h164", "")
     chkClick := settingsGui.AddCheckbox("x36 y204 w20 h20 " (clickEffectEnabled ? "Checked" : ""), "")
-    settingsGui.AddText("x60 y205 w300", "포커스 클릭효과 (좌클릭)")
+    settingsGui.AddText("x60 y205 w300", "포커스 클릭 효과 (좌클릭)")
     lClickRows := []
     AddAll(lClickRows, AddColorRow(settingsGui, 240, "Click"))
     AddAll(lClickRows, AddSliderRow(settingsGui, 272, "테두리 굵기", 2, 12, SpotThickness, "", (v) => SpotThickness := v))
@@ -4340,7 +4340,7 @@ OpenSettingsWindow(*) {
     ; --- 오른쪽 클릭 효과 ---
     settingsGui.AddGroupBox("x22 y388 w436 h164", "")
     chkRClick := settingsGui.AddCheckbox("x36 y380 w20 h20 " (rclickEffectEnabled ? "Checked" : ""), "")
-    settingsGui.AddText("x60 y381 w300", "포커스 클릭효과 (우클릭)")
+    settingsGui.AddText("x60 y381 w300", "포커스 클릭 효과 (우클릭)")
     rClickRows := []
     AddAll(rClickRows, AddColorRow(settingsGui, 416, "RClick"))
     AddAll(rClickRows, AddSliderRow(settingsGui, 448, "테두리 굵기", 2, 12, rclickThickness, "", (v) => rclickThickness := v))
@@ -4387,7 +4387,7 @@ OpenSettingsWindow(*) {
         . "• 확대 중 Ctrl + 마우스 휠: 단계 올리기·내리기   /   Esc: 확대 끄기`n`n"
         . "• 화면을 캡처한 그림이 아니라 실시간 화면입니다. 영상도 그대로 움직입니다.`n"
         . "• 확대 화면은 고정되고 커서만 움직입니다. 커서를 가장자리 쪽으로 가져가면 그쪽으로 이동합니다.`n"
-        . "• 커서가 가리키는 곳이 그대로 클릭되고, 확대한 채로 그릴 수도 있습니다(F9).`n`n"
+        . "• 커서가 가리키는 곳이 그대로 클릭되고 확대한 채로 그릴 수도 있습니다(F9).`n`n"
         . "• Zoom·Google Meet 화면 공유와 녹화에 확대 화면이 그대로 보이고, 마우스 커서는 하나만 보입니다.`n"
         . "  공유할 때는 '창'이 아니라 '화면 전체'를 고르세요.")
     lblZoomHelp.SetFont("s9 c555555")
@@ -4526,7 +4526,7 @@ OpenSettingsWindow(*) {
         AddHotkeyRow(settingsGui, y, name)
         y += 34
     }
-    lblHotkeyHelp := settingsGui.AddText("x30 y" (y + 2) " w490 h44", "칸을 누른 뒤 원하는 키를 누르면 바뀝니다. 글자 키는 Ctrl이나 Alt와 함께 눌러야 합니다.`n다른 기능과 같은 키, Windows가 쓰는 키(Alt+Tab 등)는 쓸 수 없고, 다른 프로그램에서도 쓰는 키(F5, Ctrl+C 등)는 겹친다고 알려 드립니다.")
+    lblHotkeyHelp := settingsGui.AddText("x30 y" (y + 2) " w490 h44", "칸을 누른 뒤 원하는 키를 누르면 바뀝니다. 글자 키는 Ctrl이나 Alt와 함께 눌러야 합니다.`n다른 기능과 같은 키, Windows가 쓰는 키(Alt+Tab 등)는 쓸 수 없고 다른 프로그램에서도 쓰는 키(F5, Ctrl+C 등)는 겹친다고 알려 드립니다.")
     lblHotkeyHelp.SetFont("s9 c999999")
 
     ; 드로잉 중에만 쓰는 키(도형·색·굵기·지우기)는 여기 글로 늘어놓지 않는다. **키보드 그림
@@ -5635,7 +5635,7 @@ SetTrayIconsVisible(show) {
     global showTrayIcons, hIconSpotOff, hIconSpotOn, hIconDrawOff, hIconDrawOn, spotlightOn, drawOn
     showTrayIcons := show
     if show {
-        AddQuickTrayIcon(1, spotlightOn ? hIconSpotOn : hIconSpotOff, "강조 켜기/끄기")
+        AddQuickTrayIcon(1, spotlightOn ? hIconSpotOn : hIconSpotOff, "하이라이트 켜기/끄기")
         AddQuickTrayIcon(2, drawOn ? hIconDrawOn : hIconDrawOff, "드로잉 켜기/끄기")
     } else {
         RemoveQuickTrayIcon(1)
@@ -5812,7 +5812,7 @@ MaybeAskBoardMode() {
     }
     boardModeAsked := true
     try IniWrite(1, SETTINGS_PATH, "Common", "BoardModeAsked")
-    if (MsgBox("터치 화면이 있는 PC입니다.`n`n전자칠판 모드로 쓸까요?`n위젯이 크게 세로로 바뀌고, 확대 +/− 버튼과 드로잉 팔레트(색 · 굵기 · 지우개)가 생깁니다.`n`n나중에 설정 → 위젯 탭이나 위젯을 길게 눌러 바꿀 수 있습니다."
+    if (MsgBox("터치 화면이 있는 PC입니다.`n`n전자칠판 모드로 쓸까요?`n위젯이 크게 세로로 바뀌고 확대 +/− 버튼과 드로잉 팔레트(색 · 굵기 · 지우개)가 생깁니다.`n`n나중에 설정 → 위젯 탭이나 위젯을 길게 눌러 바꿀 수 있습니다."
         , "ClassZoom - 전자칠판 모드", "YesNo Icon?") = "Yes")
         SetBoardMode(true)
 }
@@ -6226,13 +6226,13 @@ ChangeHotkey(name, combo, ctrl) {
     reason := ""
     sysUse := HotkeySystemUse(combo)
     if (sysUse != "")
-        reason := HotkeyText(combo) "는 " sysUse "`n이 키는 ClassZoom 단축키로 쓸 수 없습니다. 다른 조합으로 정해주세요."
+        reason := HotkeyText(combo) "는 " sysUse "`n이 키는 ClassZoom 단축키로 쓸 수 없습니다. 다른 조합으로 정해 주세요."
     else if !IsSafeHotkey(combo)
-        reason := "Ctrl이나 Alt를 함께 누르는 조합으로 정해주세요.`n`n글자 키 하나만 지정하면 글을 쓰는 동안 그 글자를 칠 때마다 기능이 켜지고 꺼집니다. (F1~F12 같은 기능키는 단독으로도 됩니다)"
+        reason := "Ctrl이나 Alt를 함께 누르는 조합으로 정해 주세요.`n`n글자 키 하나만 지정하면 글을 쓰는 동안 그 글자를 칠 때마다 기능이 켜지고 꺼집니다. (F1~F12 같은 기능키는 단독으로도 됩니다)"
     else {
         for otherName, otherCombo in hotkeyCombos {
             if (otherName != name && otherCombo = combo) {
-                reason := "이미 " HOTKEY_LABELS[otherName] " 기능에 쓰고 있는 조합입니다.`n다른 조합으로 정해주세요."
+                reason := "이미 " HOTKEY_LABELS[otherName] " 기능에 쓰고 있는 조합입니다.`n다른 조합으로 정해 주세요."
                 break
             }
         }
@@ -6254,7 +6254,7 @@ ChangeHotkey(name, combo, ctrl) {
         }
     }
     if (reason = "" && !RegisterHotkey(name, combo)) {
-        reason := "이 조합은 단축키로 등록할 수 없습니다.`n다른 조합으로 정해주세요."
+        reason := "이 조합은 단축키로 등록할 수 없습니다.`n다른 조합으로 정해 주세요."
         RegisterHotkey(name, old) ; 원래 단축키를 되살려서 아무것도 안 먹는 상태를 피한다
     }
 

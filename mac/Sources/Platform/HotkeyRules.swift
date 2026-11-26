@@ -72,7 +72,7 @@ enum HotkeyRules {
         if isLetterOrDigit {
             if ctrl || (cmd && opt) { return .ok }
             if cmd { return .rejected("\(shown): ⌘와 글자만으로는 앱 단축키(복사·붙여넣기 등)와 겹칩니다. ⌃를 함께 누르세요.") }
-            if opt { return .rejected("\(shown): ⌥와 글자만으로는 특수 문자가 입력되고, macOS 15.0~15.1에서는 등록이 거절됩니다. ⌃를 함께 누르세요.") }
+            if opt { return .rejected("\(shown): ⌥와 글자만으로는 특수 문자가 입력되고 macOS 15.0~15.1에서는 등록이 거절됩니다. ⌃를 함께 누르세요.") }
             _ = shift
             return .rejected("\(shown): 글자나 숫자는 ⌃, ⌥ 같은 보조 키와 함께 눌러야 합니다 (⌃⌥와 함께를 권합니다).")
         }
