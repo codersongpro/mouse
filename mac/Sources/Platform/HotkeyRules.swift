@@ -29,6 +29,7 @@ enum HotkeyRules {
         case "CaptureAlt": return "창 캡처 (대체 키)"
         case "CaptureArea": return "구역 지정 캡처"
         case "CaptureScreen": return "전체 화면 캡처"
+        case "CaptureScroll": return "스크롤 캡처"
         default: return name
         }
     }

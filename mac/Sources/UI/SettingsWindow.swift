@@ -620,7 +620,7 @@ struct SettingsView: View {
     }
 
     // 기본 키 순서(F6 캡처 → F7 라이브 줌 → F8 하이라이트 → F9 드로잉 → F10 녹화)로 보여 준다. 저장 순서(SettingsSchema)는 그대로 둔다.
-    private static let keyOrder = ["Capture", "CaptureAlt", "CaptureScreen", "CaptureArea", "Zoom", "ZoomAlt", "Spotlight", "SpotlightAlt", "Draw", "DrawAlt", "Record", "RecordAlt", "RecordPause", "RecordArea"]
+    private static let keyOrder = ["Capture", "CaptureAlt", "CaptureScreen", "CaptureArea", "CaptureScroll", "Zoom", "ZoomAlt", "Spotlight", "SpotlightAlt", "Draw", "DrawAlt", "Record", "RecordAlt", "RecordPause", "RecordArea"]
     private var hotkeysInKeyOrder: [(name: String, def: String, macOnly: Bool)] {
         SettingsSchema.hotkeys.sorted { (Self.keyOrder.firstIndex(of: $0.name) ?? 99) < (Self.keyOrder.firstIndex(of: $1.name) ?? 99) }
     }

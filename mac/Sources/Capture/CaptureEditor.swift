@@ -124,7 +124,7 @@ final class CaptureCanvas: NSView {
     private var fit: (s: CGFloat, ox: CGFloat, oy: CGFloat) {
         let w = CGFloat(composite.width), h = CGFloat(composite.height)
         let one = 1 / (window?.backingScaleFactor ?? 2) // 그림 1픽셀 = 화면 1픽셀 (원래 크기)보다 키우지 않는다
-        let s = max(0.02, min(one, (bounds.width - 16) / w, (bounds.height - 16) / h))
+        let s = max(0.01, min(one, (bounds.width - 16) / w, (bounds.height - 16) / h))
         return (s, ((bounds.width - w * s) / 2).rounded(), ((bounds.height - h * s) / 2).rounded())
     }
 
@@ -402,6 +402,7 @@ final class CaptureEditorWindow: NSWindow {
         setStatus("\(name) · 그림 위를 \(canvas.tool == .text ? "클릭해 글자를 넣으세요." : "끌어서 쓰세요.")   ⌘Z 되돌리기 · ⌘C 복사 · ⌘S 저장")
     }
     private func setStatus(_ t: String) { status.stringValue = t }
+    func showNote(_ t: String) { setStatus(t) } // 스크롤 캡처가 어떻게 끝났는지
 
     private func askText(_ done: @escaping (String) -> Void) {
         let a = NSAlert()

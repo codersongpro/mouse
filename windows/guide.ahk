@@ -59,7 +59,7 @@ ShowUsageGuide(*) {
         [ICON_CAP_PATH, "화면 캡처", HotkeyText(hotkeyCombos["Capture"])
             , "창을 클릭하거나 구역을 끌어서 찍고 편집 창에서 펜·도형·글자·모자이크를 넣습니다. 찍으면 바로 클립보드에 복사됩니다.`n"
             . "전체 화면 " HotkeyText(hotkeyCombos["CaptureScreen"]) " · 구역 지정 " HotkeyText(hotkeyCombos["CaptureArea"])
-            . " · 저장 위치 사진\ClassZoom"],
+            . " · 스크롤 캡처 " HotkeyText(hotkeyCombos["CaptureScroll"]) " · 저장 위치 사진\ClassZoom"],
         [ICON_ZOOM_DARK_PATH, "라이브 줌", HotkeyText(hotkeyCombos["Zoom"])
             , "누를 때마다 1단계 → 2단계 → 3단계 → 끄기. 영상도 그대로 움직입니다."],
         [ICON_SPOT_DARK_PATH, "마우스 하이라이트", HotkeyText(hotkeyCombos["Spotlight"])

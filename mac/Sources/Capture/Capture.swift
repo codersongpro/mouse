@@ -4,6 +4,7 @@ import ScreenCaptureKit
 // ================= 화면 캡처 (ClassZoom) =================
 // F6(또는 위젯의 캡처 버튼): 마우스를 올린 창에 빨간 테두리가 뜨고, 클릭하면 그 창을, 누른 채 끌면 그 구역을 찍는다
 // ⇧F6: 커서가 있는 화면 전체 / ⌃⇧F6: 마우스로 끌어 고른 구역 (Windows 판과 같은 키)
+// ⌃F6: 스크롤 캡처 — 창·구역을 고르면 휠을 굴려 내리며 찍고 한 장으로 이어 붙인다 (ScrollCapture.swift)
 // 찍은 그림은 곧바로 클립보드에 넣고, 편집 창(CaptureEditor)을 띄운다.
 //
 //  - 늘 "보이는 화면" 그대로 찍는다: 화면 하나를 ScreenCaptureKit으로 찍고 고른 자리만 잘라 낸다.
@@ -13,18 +14,23 @@ import ScreenCaptureKit
 //    그림은 화면에 남기고 드로잉 키만 푼다(esc가 드로잉을 지우지 않게).
 
 @MainActor final class Capturer {
-    enum Mode { case window, area, screen }
+    enum Mode { case window, area, screen, scroll }
 
     var excluded: () -> [Int] = { [] }      // 찍지 않을 우리 창 번호
     var willPick: () -> Void = {}           // 고르기 시작 (드로잉 키·줌 esc를 내려 둔다)
     var didPick: () -> Void = {}            // 고르기 끝 (줌 esc를 되돌린다)
     var onCaptured: (CGImage) -> Void = { _ in }
     var onCancelled: () -> Void = {}        // 취소·실패 (감춰 둔 편집 창을 되살린다)
+    var inkWindows: () -> [Int] = { [] }    // 스크롤 캡처에서 더 뺄 창 (드로잉 판: 그림이 따라 움직이지 않는다)
+    var onScrollCaptured: (CGImage, String) -> Void = { _, _ in }
 
     private var busy = false
     private var windowPicker: WindowPicker?
     private var areaPicker: AreaPicker?
-    var windowNumbers: [Int] { (windowPicker?.windowNumbers ?? []) + (areaPicker?.windowNumbers ?? []) }
+    private let scroller = ScrollShooter()
+    var windowNumbers: [Int] { (windowPicker?.windowNumbers ?? []) + (areaPicker?.windowNumbers ?? []) + scroller.windowNumbers }
+    var isScrolling: Bool { scroller.running }
+    func stopScroll() { scroller.stop() }
 
     func capture(_ mode: Mode) {
         guard !busy else { return }
@@ -43,19 +49,54 @@ import ScreenCaptureKit
             p.hint = "캡처할 구역을 마우스로 끌어 주세요  ·  esc 취소"
             areaPicker = p
             p.pick { [weak self] r in self?.picked(r) }
-        case .window:
+        case .window, .scroll:
             let p = WindowPicker()
+            if mode == .scroll { p.hint = "스크롤할 창을 클릭하거나 구역을 끌어 주세요  ·  esc 취소" }
             windowPicker = p
-            p.pick { [weak self] r in self?.picked(r) }
+            p.pick { [weak self] r in self?.picked(r, scroll: mode == .scroll) }
         }
     }
 
-    private func picked(_ r: CGRect?) {
+    private func picked(_ r: CGRect?, scroll: Bool = false) {
+        let press = windowPicker?.lastPress
         areaPicker = nil
         windowPicker = nil
         didPick()
         guard let r else { finish(); onCancelled(); return }
-        shoot(r)
+        if scroll { scrollShoot(r, press: press) } else { shoot(r) }
+    }
+
+    // 스크롤 캡처: 창을 클릭했으면 누른 자리, 구역이면 가운데에서 휠을 굴린다
+    private func scrollShoot(_ r: CGRect, press: NSPoint?) {
+        guard r.width >= 30, r.height >= 60 else {
+            finish(); onCancelled()
+            Notice.show(NoticeContent(title: "구역이 너무 작습니다", body: ["스크롤 캡처는 높이 60pt 이상인 창이나 구역에서만 됩니다."]))
+            return
+        }
+        guard ScrollShooter.canPostEvents() else {
+            finish(); onCancelled()
+            Notice.show(Notice.accessibilityNeeded(feature: "스크롤 캡처"))
+            return
+        }
+        let pt = press.flatMap { r.contains($0) ? $0 : nil } ?? NSPoint(x: r.midX, y: r.midY)
+        let saved = CGEvent(source: nil)?.location
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 150_000_000) // 고르기 창이 화면에서 빠질 때까지
+            defer { self.finish() }
+            let res = await self.scroller.run(r, at: pt, excluding: { [weak self] in
+                guard let self else { return [] }
+                return self.excluded() + self.inkWindows()
+            })
+            if let s = saved { CGWarpMouseCursorPosition(s) } // 커서를 처음 자리로
+            guard let shot = res else {
+                self.onCancelled()
+                Notice.show(Notice.screenRecordingNeeded(feature: "스크롤 캡처"))
+                return
+            }
+            let (img, note) = shot
+            Log.log("CAP", "scroll shot \(img.width)x\(img.height)")
+            self.onScrollCaptured(img, note)
+        }
     }
 
     private func finish() { busy = false }
@@ -128,6 +169,8 @@ import ScreenCaptureKit
     private var pressAt: NSPoint?      // 누른 자리 (진짜 커서)
     private var dragStart: NSPoint?    // 끌기 시작 자리 (확대 중이면 보이는 자리)
     private var dragRect: CGRect?
+    private(set) var lastPress: NSPoint? // 마지막으로 누른 자리 (스크롤 캡처는 그 자리에서 휠을 굴린다)
+    var hint = "클릭하면 창 · 끌면 구역을 캡처합니다  ·  esc 취소"
     var windowNumbers: [Int] { windows.map(\.windowNumber) + [hintWindow?.windowNumber].compactMap { $0 } }
 
     final class PickView: NSView {
@@ -167,7 +210,7 @@ import ScreenCaptureKit
             w.isReleasedWhenClosed = false
             w.sharingType = .none
             let v = PickView(frame: NSRect(origin: .zero, size: scr.frame.size))
-            v.onDown = { [weak self] in self?.pressAt = NSEvent.mouseLocation }
+            v.onDown = { [weak self] in self?.pressAt = NSEvent.mouseLocation; self?.lastPress = NSEvent.mouseLocation }
             v.onDrag = { [weak self] in self?.dragged() }
             v.onUp = { [weak self] in self?.released() }
             v.onCancel = { [weak self] in self?.finish(nil) }
@@ -176,7 +219,7 @@ import ScreenCaptureKit
             w.orderFrontRegardless()
             windows.append(w)
         }
-        hintWindow = showPickHint("클릭하면 창 · 끌면 구역을 캡처합니다  ·  esc 취소")
+        hintWindow = showPickHint(hint)
         windows.first?.makeKey()
         let esc: (NSEvent) -> Void = { [weak self] e in if e.keyCode == 53 { self?.finish(nil) } }
         if let g = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: esc) { monitors.append(g) }

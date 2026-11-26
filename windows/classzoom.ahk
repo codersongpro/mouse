@@ -94,7 +94,7 @@ ShowTermsNotice(owner := 0) {
         . "· 캡처한 그림, 녹화한 영상, 설정 파일은 이 컴퓨터에만 저장됩니다.`r`n`r`n"
         . "6. 함께 쓰는 공개 소프트웨어`r`n· FFmpeg (GNU LGPL 2.1): 화면 녹화에 수정하지 않고 그대로 씁니다. 라이선스 전문은 처음 녹화할 때 %LOCALAPPDATA%\ClassZoom\engine 폴더에 꺼내지고, zip 판의 licenses 폴더에도 있습니다. 소스: ffmpeg.org`r`n"
         . "· AutoHotkey v2: Windows 판을 만든 도구입니다. autohotkey.com`r`n`r`n"
-        . "7. 문의`r`nsongpro.app 또는 GitHub 이슈(github.com/codersongpro/mouse/issues)"
+        . "7. 문의`r`nsongpro.app"
     g := Gui("+AlwaysOnTop -MinimizeBox -MaximizeBox" (owner ? " +Owner" owner : ""), "ClassZoom — 저작권 및 이용 약관")
     termsGui := g
     g.BackColor := "FFFFFF"
@@ -159,17 +159,17 @@ DllCall("gdiplus\GdiplusStartup", "ptr*", &gdipToken, "ptr", gdipStartupInput, "
 ; 하나 등록할 때마다 그 키를 Windows 전체에서 빼앗으므로, 값어치가 낮은 것은 두지 않는 게 낫다.
 HOTKEY_DEFAULTS := Map("Spotlight", "F8", "Draw", "F9", "Zoom", "F7"
     , "Record", "F10", "RecordPause", "^F10", "RecordArea", "^+F10"
-    , "Capture", "F6", "CaptureArea", "^+F6", "CaptureScreen", "+F6")
+    , "Capture", "F6", "CaptureArea", "^+F6", "CaptureScreen", "+F6", "CaptureScroll", "^F6")
 HOTKEY_LABELS := Map("Spotlight", "하이라이트", "Draw", "드로잉", "Zoom", "라이브 줌"
     , "Record", "녹화", "RecordPause", "일시정지", "RecordArea", "영역 녹화"
-    , "Capture", "창 캡처", "CaptureArea", "구역 캡처", "CaptureScreen", "전체 캡처")
+    , "Capture", "창 캡처", "CaptureArea", "구역 캡처", "CaptureScreen", "전체 캡처", "CaptureScroll", "스크롤 캡처")
 ; 녹화·캡처 단축키는 앞 프로그램에 넘기지 않고 삼킨다. F10은 대부분의 프로그램에서 메뉴 막대를 여는
 ; 키라서, 넘기면 녹화를 시작·정지할 때마다 앞 프로그램의 메뉴가 열린다. F6도 한글에서 스타일 창을
 ; 여는 키라서 넘기면 그 창이 떠서 캡처에 함께 찍힌다(2026-11-25 사용자 결정: 넘기지 않음).
-HOTKEY_NO_PASS := Map("Record", 1, "RecordPause", 1, "RecordArea", 1, "Capture", 1, "CaptureArea", 1, "CaptureScreen", 1)
+HOTKEY_NO_PASS := Map("Record", 1, "RecordPause", 1, "RecordArea", 1, "Capture", 1, "CaptureArea", 1, "CaptureScreen", 1, "CaptureScroll", 1)
 ; 나중에 생긴 단축키(캡처 F6 등). 예전에 다른 기능을 이 키로 바꿔 둔 PC에서는 새 기본값이 그 키를 조용히
 ; 가로채지 않도록, 켤 때 겹치면 이쪽을 비워 둔다(LoadSettings). 설정 → 단축키에서 다른 키로 정하면 된다.
-HOTKEY_LATER := ["Capture", "CaptureArea", "CaptureScreen"]
+HOTKEY_LATER := ["Capture", "CaptureArea", "CaptureScreen", "CaptureScroll"]
 hotkeyBlanked := [] ; 위 이유로 비워 둔 기능 이름 (켤 때 한 번 알린다)
 hotkeyCombos := Map()     ; 지금 설정된 조합 (settings.ini에서 불러옴)
 hotkeyRegistered := Map() ; 실제로 등록에 성공해 살아있는 조합 (해제할 때 필요)
@@ -4522,7 +4522,7 @@ OpenSettingsWindow(*) {
     tabs.UseTab("단축키")
     ; 기본 키 순서(F6 → F7 → F8 → F9 → F10)대로 늘어놓는다 — 위젯·안내문·랜딩페이지와 같은 순서
     y := 44
-    for name in ["Capture", "CaptureScreen", "CaptureArea", "Zoom", "Spotlight", "Draw", "Record", "RecordPause", "RecordArea"] {
+    for name in ["Capture", "CaptureScreen", "CaptureArea", "CaptureScroll", "Zoom", "Spotlight", "Draw", "Record", "RecordPause", "RecordArea"] {
         AddHotkeyRow(settingsGui, y, name)
         y += 34
     }
@@ -5422,12 +5422,13 @@ ClampWidgetIntoScreen() {
 
 WidgetContextMenu(g, ctrl, *) {
     global btnRecOff, btnRecOn, recState, boardMode, btnCap
-    ; 캡처 버튼: 창 / 구역 지정 / 전체 화면
+    ; 캡처 버튼: 창 / 구역 지정 / 전체 화면 / 스크롤
     if (IsObject(ctrl) && ctrl = btnCap) {
         m := Menu()
         m.Add("창 캡처" WidgetTipKey("Capture"), CapWindow)
         m.Add("구역 지정 캡처" WidgetTipKey("CaptureArea"), CapArea)
         m.Add("전체 화면 캡처" WidgetTipKey("CaptureScreen"), CapScreen)
+        m.Add("스크롤 캡처" WidgetTipKey("CaptureScroll"), CapScroll)
         m.Show()
         return
     }
@@ -5828,7 +5829,7 @@ WidgetTipText(kind) {
     case "grip": return "끌어서 옮기기"
     case "spot": return "마우스 하이라이트" WidgetTipKey("Spotlight")
     case "draw": return "드로잉" WidgetTipKey("Draw")
-    case "cap": return "화면 캡처" WidgetTipKey("Capture") " · 클릭: 창 · 끌기: 구역 · 오른쪽 클릭: 전체 화면"
+    case "cap": return "화면 캡처" WidgetTipKey("Capture") " · 클릭: 창 · 끌기: 구역 · 오른쪽 클릭: 전체 화면·스크롤"
     case "zoom": return "라이브 줌" WidgetTipKey("Zoom") " · 누를 때마다 1 → 2 → 3단계 → 끄기"
     case "zplus": return "확대 단계 올리기"
     case "zminus": return "확대 단계 내리기 (1단계에서 누르면 끄기)"
@@ -5934,7 +5935,7 @@ SetWidgetVisible(showWidget) ; 트레이 메뉴 체크 표시까지 시작 상�
 ; 이름 → 실제로 실행할 동작. 설정 창에서 조합을 바꿔도 동작은 그대로이므로 여기서 한 번만 묶는다.
 HOTKEY_ACTIONS := Map("Spotlight", ToggleSpotlight, "Draw", ToggleDraw, "Zoom", ToggleZoom
     , "Record", RecToggle, "RecordPause", RecPauseToggle, "RecordArea", RecToggleArea
-    , "Capture", CapWindow, "CaptureArea", CapArea, "CaptureScreen", CapScreen)
+    , "Capture", CapWindow, "CaptureArea", CapArea, "CaptureScreen", CapScreen, "CaptureScroll", CapScroll)
 
 ; 저장해둔 조합으로 전역 단축키를 켠다. 다른 프로그램이 이미 쓰는 조합이면 등록에 실패하는데,
 ; 시작하자마자 오류 창을 띄우면 수업 중에 곤란하므로 조용히 건너뛴다(위젯과 트레이는 그대로 동작).
