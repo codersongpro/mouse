@@ -489,7 +489,7 @@ CapScrollShot(&rect) {
     rect := "", capScrollNote := ""
     rect := CapPickWindow("스크롤할 창을 클릭하거나 구역을 끌어 주세요   ·   Esc 취소")
     if (IsObject(rect) && (rect.w < 40 || rect.h < 80)) {
-        MsgBox("스크롤 캡처는 높이 80px 이상인 구역에서만 됩니다.", "ClassZoom — 스크롤 캡처", "Icon!")
+        MsgBox("스크롤 캡처는 높이 80px 이상인 창이나 구역에서만 됩니다.", "ClassZoom — 스크롤 캡처", "Icon!")
         rect := ""
     }
     if !IsObject(rect)

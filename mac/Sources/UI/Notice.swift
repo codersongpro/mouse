@@ -158,7 +158,7 @@ enum Notice {
         NoticeContent(
             title: "\(feature)에는 손쉬운 사용 권한이 필요합니다",
             body: ["ClassZoom이 화면을 대신 스크롤하려면 시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 ClassZoom을 켜 주세요.",
-                   "켠 뒤 다시 시도해 주세요. 바로 되지 않으면 ClassZoom을 한 번 종료했다가 다시 엽니다.",
+                   "켠 뒤 다시 시도해 주세요. 바로 되지 않으면 ClassZoom을 한 번 종료했다가 다시 여세요.",
                    "서명하지 않은 앱이라 새 버전으로 바꾼 뒤에는 이 권한을 다시 켜야 할 수 있습니다."],
             buttons: [("시스템 설정 열기", {
                 if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") { NSWorkspace.shared.open(u) }
