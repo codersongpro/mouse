@@ -2,7 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 import SwiftUI
 
-// 설정 창: 일반·포커스·드로잉·위젯·단축키 5개 탭. 움직이면 바로 화면에 반영되고,
+// 설정 창: 일반·하이라이트·드로잉·위젯·단축키 5개 탭. 움직이면 바로 화면에 반영되고,
 // "저장"을 눌러야 다음 실행에도 남는다 (Windows 판과 같음).
 // 칸은 SettingsLayout 표에서 만든다 — 항목표(SettingsSchema)의 모든 키가 여기에 칸이 있는지 자체 점검이 확인한다.
 
@@ -22,16 +22,16 @@ enum SettingsLayout {
     struct KeyRow { let label: String; let color: String; let opacity: String; var step: String? = nil }
 
     static let focus: [Panel] = [
-        Panel(title: "포커스 하이라이트", fields: [
+        Panel(title: "마우스 하이라이트", fields: [
             Field(id: "Highlight.Color", label: "색상"),
             Field(id: "Highlight.Size", label: "크기", suffix: "px", step: 5),
             Field(id: "Highlight.Opacity", label: "투명도", suffix: "%", step: 5)]),
-        Panel(title: "포커스 클릭 효과 (좌클릭)", toggle: "Highlight.ClickEffect", fields: [
+        Panel(title: "클릭 효과 (좌클릭)", toggle: "Highlight.ClickEffect", fields: [
             Field(id: "Highlight.ClickColor", label: "색상"),
             Field(id: "Highlight.RingThickness", label: "테두리 굵기"),
             Field(id: "Highlight.ClickOpacity", label: "투명도", suffix: "%", step: 5),
             Field(id: "Highlight.ClickSpeed", label: "빠르기")]),
-        Panel(title: "포커스 클릭 효과 (우클릭)", toggle: "Highlight.RClickEffect", fields: [
+        Panel(title: "클릭 효과 (우클릭)", toggle: "Highlight.RClickEffect", fields: [
             Field(id: "Highlight.RClickColor", label: "색상"),
             Field(id: "Highlight.RClickThickness", label: "테두리 굵기"),
             Field(id: "Highlight.RClickOpacity", label: "투명도", suffix: "%", step: 5),
@@ -434,7 +434,7 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             TabView(selection: Binding(get: { tab < 0 ? startTab : tab }, set: { tab = $0 })) {
                 general.tabItem { Text("일반") }.tag(0)
-                focus.tabItem { Text("포커스") }.tag(1)
+                focus.tabItem { Text("하이라이트") }.tag(1)
                 drawing.tabItem { Text("드로잉") }.tag(2)
                 zoomRecord.tabItem { Text("확대·녹화") }.tag(5)
                 widget.tabItem { Text("위젯") }.tag(3)
@@ -523,7 +523,7 @@ struct SettingsView: View {
         else if on && r.state == .needsApproval { Notice.show(Notice.loginNeedsApproval()) }
     }
 
-    // ---- 포커스 ----
+    // ---- 하이라이트 ----
     private var focus: some View {
         Page {
             ForEach(SettingsLayout.focus, id: \.title) { GroupBoxView(g: $0) }

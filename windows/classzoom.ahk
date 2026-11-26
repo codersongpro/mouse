@@ -4303,16 +4303,16 @@ OpenSettingsWindow(*) {
     ;  안쪽 내용이 아래로 밀리므로, 탭을 추가할 때는 창 너비도 같이 넓혀야 한다)
     ; 높이는 가장 내용이 많은 "드로잉" 탭에 맞춰져 있다. 색 목록(스크롤되는 칸)이 아래쪽
     ; y536까지 내려오므로, 그보다 줄이면 잘린다 — 여기와 아래 버튼 위치, 창 높이를 같이 봐야 한다.
-    ; "포인터"와 "클릭효과"를 **"포커스" 한 탭으로 합쳤다.** 셋 다 마우스 자리를 짚어주는
+    ; "포인터"와 "클릭효과"를 **"하이라이트" 한 탭으로 합쳤다(예전 이름 "포커스").** 셋 다 마우스 자리를 짚어주는
     ; 같은 목적의 기능이라 나눠 둘 이유가 없었고, 나뉘어 있으면 클릭효과의 색이 하이라이트와
     ; 다른 색이라는 것도 눈에 안 들어온다. 대신 탭 안에서 테두리 상자로 셋을 갈라둔다.
     ; "확대" 탭을 더해 여섯 개다 — 위 설명대로 이 너비에서 한 줄에 들어간다.
     ; "녹화" 탭까지 일곱 개라 창을 넓혔다 (여섯 개까지가 w460에 한 줄로 들어갔다).
-    tabs := settingsGui.AddTab3("x10 y10 w540 h552", ["일반", "포커스", "드로잉", "확대", "녹화", "위젯", "단축키"])
+    tabs := settingsGui.AddTab3("x10 y10 w540 h552", ["일반", "하이라이트", "드로잉", "확대", "녹화", "위젯", "단축키"])
 
-    tabs.UseTab("포커스")
+    tabs.UseTab("하이라이트")
     ; --- 하이라이트 ---
-    settingsGui.AddGroupBox("x22 y42 w436 h158", "포커스 하이라이트")
+    settingsGui.AddGroupBox("x22 y42 w436 h158", "마우스 하이라이트")
     ; 체크박스 라벨 텍스트까지 클릭 영역에 포함되면 실수로 누르기 쉬워서, 네모 칸만 클릭
     ; 가능하게 하고 글자는 옆에 별도의(클릭 안 되는) 텍스트로 둔다.
     chkHideCursor := settingsGui.AddCheckbox("x36 y70 w20 h20 " (hideCursorOnHighlight ? "Checked" : ""), "")
@@ -4325,7 +4325,7 @@ OpenSettingsWindow(*) {
     ; --- 왼쪽 클릭 효과 --- (켜고 끄는 체크박스를 상자 제목 자리에 얹는다)
     settingsGui.AddGroupBox("x22 y212 w436 h164", "")
     chkClick := settingsGui.AddCheckbox("x36 y204 w20 h20 " (clickEffectEnabled ? "Checked" : ""), "")
-    settingsGui.AddText("x60 y205 w300", "포커스 클릭 효과 (좌클릭)")
+    settingsGui.AddText("x60 y205 w300", "클릭 효과 (좌클릭)")
     lClickRows := []
     AddAll(lClickRows, AddColorRow(settingsGui, 240, "Click"))
     AddAll(lClickRows, AddSliderRow(settingsGui, 272, "테두리 굵기", 2, 12, SpotThickness, "", (v) => SpotThickness := v))
@@ -4340,7 +4340,7 @@ OpenSettingsWindow(*) {
     ; --- 오른쪽 클릭 효과 ---
     settingsGui.AddGroupBox("x22 y388 w436 h164", "")
     chkRClick := settingsGui.AddCheckbox("x36 y380 w20 h20 " (rclickEffectEnabled ? "Checked" : ""), "")
-    settingsGui.AddText("x60 y381 w300", "포커스 클릭 효과 (우클릭)")
+    settingsGui.AddText("x60 y381 w300", "클릭 효과 (우클릭)")
     rClickRows := []
     AddAll(rClickRows, AddColorRow(settingsGui, 416, "RClick"))
     AddAll(rClickRows, AddSliderRow(settingsGui, 448, "테두리 굵기", 2, 12, rclickThickness, "", (v) => rclickThickness := v))
