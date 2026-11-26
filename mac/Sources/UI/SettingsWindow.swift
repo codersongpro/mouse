@@ -2,7 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 import SwiftUI
 
-// 설정 창: 일반·포커스·드로잉·위젯·단축키 5개 탭. 움직이면 바로 화면에 반영되고,
+// 설정 창: 일반·하이라이트·드로잉·위젯·단축키 5개 탭. 움직이면 바로 화면에 반영되고,
 // "저장"을 눌러야 다음 실행에도 남는다 (Windows 판과 같음).
 // 칸은 SettingsLayout 표에서 만든다 — 항목표(SettingsSchema)의 모든 키가 여기에 칸이 있는지 자체 점검이 확인한다.
 
@@ -22,16 +22,16 @@ enum SettingsLayout {
     struct KeyRow { let label: String; let color: String; let opacity: String; var step: String? = nil }
 
     static let focus: [Panel] = [
-        Panel(title: "포커스 하이라이트", fields: [
+        Panel(title: "마우스 하이라이트", fields: [
             Field(id: "Highlight.Color", label: "색상"),
             Field(id: "Highlight.Size", label: "크기", suffix: "px", step: 5),
             Field(id: "Highlight.Opacity", label: "투명도", suffix: "%", step: 5)]),
-        Panel(title: "포커스 클릭효과 (좌클릭)", toggle: "Highlight.ClickEffect", fields: [
+        Panel(title: "클릭 효과 (좌클릭)", toggle: "Highlight.ClickEffect", fields: [
             Field(id: "Highlight.ClickColor", label: "색상"),
             Field(id: "Highlight.RingThickness", label: "테두리 굵기"),
             Field(id: "Highlight.ClickOpacity", label: "투명도", suffix: "%", step: 5),
             Field(id: "Highlight.ClickSpeed", label: "빠르기")]),
-        Panel(title: "포커스 클릭효과 (우클릭)", toggle: "Highlight.RClickEffect", fields: [
+        Panel(title: "클릭 효과 (우클릭)", toggle: "Highlight.RClickEffect", fields: [
             Field(id: "Highlight.RClickColor", label: "색상"),
             Field(id: "Highlight.RClickThickness", label: "테두리 굵기"),
             Field(id: "Highlight.RClickOpacity", label: "투명도", suffix: "%", step: 5),
@@ -434,7 +434,7 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             TabView(selection: Binding(get: { tab < 0 ? startTab : tab }, set: { tab = $0 })) {
                 general.tabItem { Text("일반") }.tag(0)
-                focus.tabItem { Text("포커스") }.tag(1)
+                focus.tabItem { Text("하이라이트") }.tag(1)
                 drawing.tabItem { Text("드로잉") }.tag(2)
                 zoomRecord.tabItem { Text("확대·녹화") }.tag(5)
                 widget.tabItem { Text("위젯") }.tag(3)
@@ -523,11 +523,11 @@ struct SettingsView: View {
         else if on && r.state == .needsApproval { Notice.show(Notice.loginNeedsApproval()) }
     }
 
-    // ---- 포커스 ----
+    // ---- 하이라이트 ----
     private var focus: some View {
         Page {
             ForEach(SettingsLayout.focus, id: \.title) { GroupBoxView(g: $0) }
-            Text("강조 중에는 마우스 화살표를 숨기고, 원 한가운데에 작은 십자를 보여 줍니다.")
+            Text("하이라이트 중에는 마우스 화살표를 숨기고, 원 한가운데에 작은 십자를 보여 줍니다.")
                 .font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -563,7 +563,7 @@ struct SettingsView: View {
         Page {
             GroupBoxView(g: SettingsLayout.zoom)
             Card(title: "부드럽게 확대·축소", toggle: flagBinding(SettingsLayout.zoomSmooth)) {
-                Text("끄면 단계가 바로 바뀝니다. 확대 중 ⌃ + 휠로 단계를 오르내리고 esc로 끕니다. 화면은 고정되고, 커서를 가장자리 쪽으로 가져가면 그쪽으로 이동합니다.")
+                Text("끄면 단계가 바로 바뀝니다. 확대 중 ⌃ + 휠로 단계를 오르내리고 esc로 끕니다. 화면은 고정되고 커서를 가장자리 쪽으로 가져가면 그쪽으로 이동합니다.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             GroupBoxView(g: SettingsLayout.record)
@@ -575,7 +575,7 @@ struct SettingsView: View {
                 }
                 .labelsHidden().pickerStyle(.segmented)
                 Toggle("녹화를 시작할 때마다 화질 묻기", isOn: flagBinding("Record.AskQuality"))
-                Text("1080p는 선명하고 파일 크기도 알맞습니다. 720p는 파일이 작고, 원본은 화면 그대로라 가장 선명합니다.")
+                Text("1080p는 선명하고 파일 크기도 알맞습니다. 720p는 파일이 작고 원본은 화면 그대로라 가장 선명합니다.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Card(title: "녹음") {
@@ -599,7 +599,7 @@ struct SettingsView: View {
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Card(title: "메뉴 막대 아이콘을 위젯처럼 표시", toggle: flagBinding(SettingsLayout.trayShow)) {
-                Text("켜면 메뉴 막대에 위젯처럼 강조 · 드로잉 · 설정이 테두리로 묶여 보입니다. 강조·드로잉은 누를 때마다 켜고 끄고(켜진 것은 파랑), 설정을 누르면 메뉴가 열립니다.")
+                Text("켜면 메뉴 막대에 위젯처럼 하이라이트 · 드로잉 · 설정이 테두리로 묶여 보입니다. 하이라이트·드로잉은 누를 때마다 켜고 끄고(켜진 것은 파랑) 설정을 누르면 메뉴가 열립니다.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
@@ -620,7 +620,7 @@ struct SettingsView: View {
     }
 
     // 기본 키 순서(F6 캡처 → F7 라이브 줌 → F8 하이라이트 → F9 드로잉 → F10 녹화)로 보여 준다. 저장 순서(SettingsSchema)는 그대로 둔다.
-    private static let keyOrder = ["Capture", "CaptureAlt", "CaptureScreen", "CaptureArea", "Zoom", "ZoomAlt", "Spotlight", "SpotlightAlt", "Draw", "DrawAlt", "Record", "RecordAlt", "RecordPause", "RecordArea"]
+    private static let keyOrder = ["Capture", "CaptureAlt", "CaptureScreen", "CaptureArea", "CaptureScroll", "Zoom", "ZoomAlt", "Spotlight", "SpotlightAlt", "Draw", "DrawAlt", "Record", "RecordAlt", "RecordPause", "RecordArea"]
     private var hotkeysInKeyOrder: [(name: String, def: String, macOnly: Bool)] {
         SettingsSchema.hotkeys.sorted { (Self.keyOrder.firstIndex(of: $0.name) ?? 99) < (Self.keyOrder.firstIndex(of: $1.name) ?? 99) }
     }

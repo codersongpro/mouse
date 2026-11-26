@@ -5,6 +5,8 @@
 ; 무엇을 하나
 ;   F6(또는 위젯의 캡처 버튼): 마우스를 올린 창에 빨간 테두리가 뜨고, 클릭하면 그 창을, 누른 채 끌면 그 구역을 찍는다
 ;   Shift+F6: 커서가 있는 모니터 전체 / Ctrl+Shift+F6: 마우스로 끌어 고른 구역
+;   Ctrl+F6: 스크롤 캡처 — 창을 클릭하거나 구역을 끌면 ClassZoom이 휠을 굴려 내리며 찍고 한 장으로 이어 붙인다.
+;            끝에 닿으면 저절로 멈추고, Esc나 [멈춤] 버튼으로 중간에 멈추면 거기까지 이어 붙인 그림을 편집 창에 띄운다.
 ;   찍은 그림은 곧바로 클립보드에 복사하고, 편집 창(펜·형광펜·네모·화살표·글자·모자이크·자르기)을 띄운다.
 ;   편집 창에서 [복사]·[저장](사진\ClassZoom 폴더에 PNG)·[다른 이름으로]를 고른다.
 ;
@@ -32,11 +34,20 @@ capCancel := false
 capHint := "", capDim := "", capFrames := [], capCatch := ""
 cap := ""                       ; 편집 창 상태 (열려 있지 않으면 "")
 capZoomResume := 0              ; 편집 창을 닫으면 다시 켤 확대 단계 (0 = 없음)
+capPickPt := ""                 ; 창 고르기에서 누른 자리 (스크롤 캡처는 그 자리에서 휠을 굴린다)
+capScrolling := false           ; 스크롤 캡처로 찍는 중 (Esc = 멈춤)
+capScrollPanel := "", capScrollInfo := "", capScrollNote := ""
+
+; 스크롤 캡처 조절값
+CAP_SCROLL_WAIT_MS := 280       ; 휠을 굴린 뒤 화면이 멈출 때까지 기다리는 시간 (부드러운 스크롤 포함)
+CAP_SCROLL_MAX_H := 20000       ; 이어 붙인 그림의 최대 높이(px). 넘으면 거기서 멈춘다
+CAP_SCROLL_MAX_STEPS := 300     ; 휠을 굴리는 최대 횟수
 
 ; ---------------- 단축키가 부르는 것 ----------------
 CapWindow(*) => CapStart("window")
 CapScreen(*) => CapStart("screen")
 CapArea(*) => CapStart("area")
+CapScroll(*) => CapStart("scroll")
 
 CapStart(mode) {
     global capBusy
@@ -50,7 +61,7 @@ CapStart(mode) {
 }
 
 CapRun(mode) {
-    global cap
+    global cap, capScrollNote, zoomOn, zoomStep, zoomVisible, capZoomResume, drawOn
     ; 편집 창이 떠 있으면 찍는 동안 감춘다 (새로 찍으면 그 창은 닫는다)
     hadEditor := IsObject(cap)
     if hadEditor {
@@ -59,33 +70,52 @@ CapRun(mode) {
             return
         cap.gui.Hide()
     }
+    ; 스크롤 캡처는 확대를 끄고(휠·찍는 자리가 어긋난다) 드로잉도 끈다. 확대는 편집 창을 닫으면 다시 켠다.
+    ; DPI 인식을 바꾸기 전에 해야 확대 창 좌표가 어긋나지 않는다.
+    scrollZoom := 0
+    if (mode = "scroll") {
+        if zoomOn {
+            scrollZoom := zoomStep, capZoomResume := zoomStep
+            ZoomStop()
+            t0 := A_TickCount
+            while (zoomVisible && A_TickCount - t0 < 1500) ; 부드럽게 줄어드는 동안 기다린다
+                Sleep(20)
+        }
+        if drawOn
+            ToggleDraw()
+    }
     ; 고르기·찍기는 "모니터마다 DPI 인식" 상태로 한다 (아래 CapDpiBegin 설명). 편집 창은 원래 상태로 띄운다.
     oldDpi := CapDpiBegin()
     try {
-        if (mode = "window")
+        if (mode = "scroll")
+            pBmp := CapScrollShot(&rect)
+        else if (mode = "window")
             rect := CapPickWindow()
         else if (mode = "area")
             rect := CapPickArea()
         else
             rect := RecMonitorRect() ; 커서가 있는 모니터 (확대 중이면 확대 화면 그대로)
-        pBmp := IsObject(rect) ? CapGrab(rect) : 0
+        if (mode != "scroll")
+            pBmp := IsObject(rect) ? CapGrab(rect) : 0
     } finally
         CapDpiEnd(oldDpi)
-    if !IsObject(rect) {
+    if (!IsObject(rect) || !pBmp) {
+        if IsObject(rect)
+            MsgBox("화면을 캡처하지 못했습니다.", "ClassZoom — 캡처", "Icon!")
         if (hadEditor && IsObject(cap))
             cap.gui.Show()
-        return
-    }
-    if !pBmp {
-        MsgBox("화면을 캡처하지 못했습니다.", "ClassZoom — 캡처", "Icon!")
-        if (hadEditor && IsObject(cap))
-            cap.gui.Show()
+        if (scrollZoom && !zoomOn) { ; 스크롤 캡처를 취소했다 → 껐던 확대를 되돌린다
+            capZoomResume := 0
+            ZoomStart(scrollZoom)
+        }
         return
     }
     CapToClipboard(pBmp) ; 찍자마자 붙여넣기할 수 있게
     if IsObject(cap)
         CapCloseEditor(true)
     CapOpenEditor(pBmp)
+    if (mode = "scroll" && capScrollNote != "")
+        try cap.status.Value := capScrollNote
 }
 
 ; ---------------- 화질: 실제 화면 픽셀 그대로 찍기 ----------------
@@ -110,15 +140,15 @@ CapVirtualScreen(&x, &y, &w, &h) {
 
 ; ---------------- 고르는 동안의 키·클릭 ----------------
 CapPickingNow(*) {
-    global capPicking
-    return capPicking
+    global capPicking, capScrolling
+    return capPicking || capScrolling
 }
 CapEscCancel(*) {
     global capCancel
     capCancel := true
 }
 HotIf(CapPickingNow)
-Hotkey("Esc", CapEscCancel, "On") ; 라이브 줌 Esc(실행 중 처음 확대할 때 만든다)보다 먼저 만들어 이쪽이 이긴다
+Hotkey("Esc", CapEscCancel, "On") ; 고르기 취소 · 스크롤 캡처 멈춤. 라이브 줌 Esc(실행 중 처음 확대할 때 만든다)보다 먼저 만들어 이쪽이 이긴다
 HotIf()
 
 ; 고르기 시작: 화면 전체에 거의 투명한 덮개 창을 깔아 클릭·끌기를 받는다.
@@ -170,12 +200,12 @@ CapPickCancelled() {
 ; ---------------- 창 고르기 (끌면 구역) ----------------
 ; 클릭하면 마우스 아래 창, 누른 채 끌면 그 구역을 찍는다 (픽픽처럼 F6 하나로 둘 다).
 CAP_DRAG_PX := 6 ; 이만큼 움직여야 "끌기"로 본다 (손떨림으로 클릭이 구역이 되지 않게)
-CapPickWindow() {
-    global CAP_DRAG_PX
-    rect := ""
+CapPickWindow(hint := "클릭하면 창 · 끌면 구역을 캡처합니다   ·   Esc 취소") {
+    global CAP_DRAG_PX, capPickPt
+    rect := "", capPickPt := ""
     CapPickBegin()
     try {
-        CapShowHint("클릭하면 창 · 끌면 구역을 캡처합니다   ·   Esc 취소")
+        CapShowHint(hint)
         lastKey := "-"
         loop {
             if CapPickCancelled()
@@ -191,6 +221,7 @@ CapPickWindow() {
             if GetKeyState("LButton", "P") {
                 ; 누른 자리 (확대 중이면 확대 화면에 보이는 자리)
                 MouseGetPos(&rx1, &ry1)
+                capPickPt := {x: rx1, y: ry1}
                 x1 := rx1, y1 := ry1
                 ZoomScreenPos(&x1, &y1)
                 x2 := x1, y2 := y1, dragging := false
@@ -205,7 +236,7 @@ CapPickWindow() {
                     if (!dragging && (Abs(rx2 - rx1) >= CAP_DRAG_PX || Abs(ry2 - ry1) >= CAP_DRAG_PX)) {
                         dragging := true
                         CapHideFrame() ; 창 테두리 대신 끄는 구역 테두리
-                        CapShowHint("놓으면 이 구역을 캡처합니다   ·   Esc 취소")
+                        CapShowHint(InStr(hint, "스크롤") ? "놓으면 이 구역을 스크롤하며 캡처합니다   ·   Esc 취소" : "놓으면 이 구역을 캡처합니다   ·   Esc 취소")
                     }
                     if dragging
                         RecShowFrame({x: Min(x1, x2), y: Min(y1, y2), w: Abs(x2 - x1), h: Abs(y2 - y1)})
@@ -380,9 +411,9 @@ CapHideFrame() {
 
 ; 확대 중에도 확대 화면 위(확대하지 않고)에 보여야 하는 캡처 창들 (zoom.ahk ZoomTopHwnds가 부른다)
 CapTopHwnds() {
-    global capHint, capDim, capFrames, capCatch
+    global capHint, capDim, capFrames, capCatch, capScrollPanel
     list := []
-    for g in [capCatch, capDim, capHint]
+    for g in [capCatch, capDim, capHint, capScrollPanel]
         if IsObject(g)
             try list.Push(g.Hwnd)
     for g in capFrames
@@ -393,38 +424,350 @@ CapTopHwnds() {
 ; ---------------- 찍기 ----------------
 ; 보이는 화면 그대로 찍는다(확대 화면·그린 그림 포함). 위젯·강조 원·커서 노릇을 하는 원은 잠깐 감춘다.
 CapGrab(r) {
-    global widget, spotGui, brushGui, zoomCursorGui
+    hidden := CapHideOurs()
+    Sleep(hidden.Length ? 150 : 60) ; 감춘 것이 화면(확대 화면 포함)에서 빠질 때까지
+    pBmp := 0
+    try pBmp := CapGrabRaw(r)
+    CapShowOurs(hidden)
+    return pBmp
+}
+
+; 찍을 때 빼는 우리 창을 감춘다 (withInk = 드로잉 판도: 스크롤 캡처는 그린 그림이 따라 움직이지 않아 이어 붙이기를 망친다)
+CapHideOurs(withInk := false) {
+    global widget, spotGui, brushGui, zoomCursorGui, drawGui
     hidden := []
-    for g in [IsSet(widget) ? widget : "", spotGui, brushGui, zoomCursorGui]
+    list := [IsSet(widget) ? widget : "", spotGui, brushGui, zoomCursorGui]
+    if withInk
+        list.Push(drawGui)
+    for g in list
         if (IsObject(g) && DllCall("IsWindowVisible", "ptr", g.Hwnd)) {
             DllCall("ShowWindow", "ptr", g.Hwnd, "int", 0)
             hidden.Push(g.Hwnd)
         }
     ToolTip(, , , 19) ; 위젯 설명 풍선
-    Sleep(hidden.Length ? 150 : 60) ; 감춘 것이 화면(확대 화면 포함)에서 빠질 때까지
-    pBmp := 0
-    try {
-        hdcS := DllCall("GetDC", "ptr", 0, "ptr")
-        hdcM := DllCall("CreateCompatibleDC", "ptr", hdcS, "ptr")
-        hbm := DllCall("CreateCompatibleBitmap", "ptr", hdcS, "int", r.w, "int", r.h, "ptr")
-        old := DllCall("SelectObject", "ptr", hdcM, "ptr", hbm, "ptr")
-        DllCall("BitBlt", "ptr", hdcM, "int", 0, "int", 0, "int", r.w, "int", r.h
-            , "ptr", hdcS, "int", r.x, "int", r.y, "uint", 0x40CC0020) ; SRCCOPY | CAPTUREBLT (투명 창까지)
-        DllCall("SelectObject", "ptr", hdcM, "ptr", old)
-        DllCall("DeleteDC", "ptr", hdcM)
-        DllCall("ReleaseDC", "ptr", 0, "ptr", hdcS)
-        pTmp := 0
-        DllCall("gdiplus\GdipCreateBitmapFromHBITMAP", "ptr", hbm, "ptr", 0, "ptr*", &pTmp)
-        DllCall("DeleteObject", "ptr", hbm)
-        if pTmp {
-            pBmp := CapCloneArea(pTmp, 0, 0, r.w, r.h)
-            DllCall("gdiplus\GdipDisposeImage", "ptr", pTmp)
-        }
-    }
+    return hidden
+}
+
+CapShowOurs(hidden) {
     for h in hidden
         DllCall("ShowWindow", "ptr", h, "int", 8) ; SW_SHOWNA
     RaiseWidget()
+}
+
+; 화면의 r 자리를 그대로 GDI+ 그림(32비트 ARGB)으로 찍는다. 실패하면 0
+CapGrabRaw(r) {
+    hdcS := DllCall("GetDC", "ptr", 0, "ptr")
+    hdcM := DllCall("CreateCompatibleDC", "ptr", hdcS, "ptr")
+    hbm := DllCall("CreateCompatibleBitmap", "ptr", hdcS, "int", r.w, "int", r.h, "ptr")
+    old := DllCall("SelectObject", "ptr", hdcM, "ptr", hbm, "ptr")
+    DllCall("BitBlt", "ptr", hdcM, "int", 0, "int", 0, "int", r.w, "int", r.h
+        , "ptr", hdcS, "int", r.x, "int", r.y, "uint", 0x40CC0020) ; SRCCOPY | CAPTUREBLT (투명 창까지)
+    DllCall("SelectObject", "ptr", hdcM, "ptr", old)
+    DllCall("DeleteDC", "ptr", hdcM)
+    DllCall("ReleaseDC", "ptr", 0, "ptr", hdcS)
+    pTmp := 0, pBmp := 0
+    DllCall("gdiplus\GdipCreateBitmapFromHBITMAP", "ptr", hbm, "ptr", 0, "ptr*", &pTmp)
+    DllCall("DeleteObject", "ptr", hbm)
+    if pTmp {
+        pBmp := CapCloneArea(pTmp, 0, 0, r.w, r.h)
+        DllCall("gdiplus\GdipDisposeImage", "ptr", pTmp)
+    }
     return pBmp
+}
+
+; ================= 스크롤 캡처 (Ctrl+F6) =================
+; 창을 클릭하거나 구역을 끌면, 그 자리에서 휠을 조금씩 굴려 내리며 찍고 새로 드러난 줄만 이어 붙인다.
+;   - 겹치는 자리 찾기: 줄마다 지문(표본 픽셀의 해시)을 만들고, 앞 장과 새 장에서 같은 지문이 몇 줄 차이로
+;     나타나는지 표를 던져 가장 많이 나온 차이(= 스크롤한 거리)를 고른다. 안 되면 줄 밝기 합으로 한 번 더 찾는다.
+;   - 머리·바닥 고정 줄: 처음 두 장에서 위·아래에 그대로 있는 줄(창 제목·도구 막대·고정 메뉴)은 맞추기에서 빼고,
+;     머리는 첫 장에서, 바닥은 마지막 장에서 한 번만 넣는다.
+;   - 멈추는 때: 휠을 굴려도 화면이 그대로면(끝에 닿음) · Esc · [멈춤] 버튼 · 최대 높이. 멈추면 거기까지 이은 그림을 쓴다.
+;   - 키 겹침: 찍는 동안 Esc는 "멈춤"으로만 쓴다(CapPickingNow). 확대·드로잉은 CapRun이 먼저 끈다.
+;     화면에 남겨 둔 그림은 찍는 동안 감춘다(따라 움직이지 않아 이어 붙이기를 망친다).
+CapScrollShot(&rect) {
+    global capPickPt, capScrolling, capCancel, capScrollNote
+    rect := "", capScrollNote := ""
+    rect := CapPickWindow("스크롤할 창을 클릭하거나 구역을 끌어 주세요   ·   Esc 취소")
+    if (IsObject(rect) && (rect.w < 40 || rect.h < 80)) {
+        MsgBox("스크롤 캡처는 높이 80px 이상인 창이나 구역에서만 됩니다.", "ClassZoom — 스크롤 캡처", "Icon!")
+        rect := ""
+    }
+    if !IsObject(rect)
+        return 0
+    ; 휠을 굴릴 자리: 창을 클릭했으면 누른 자리, 구역이면 가운데
+    r := rect
+    pt := {x: r.x + r.w // 2, y: r.y + r.h // 2}
+    if (IsObject(capPickPt) && capPickPt.x >= r.x && capPickPt.x < r.x + r.w && capPickPt.y >= r.y && capPickPt.y < r.y + r.h)
+        pt := capPickPt
+    MouseGetPos(&ox, &oy)
+    hidden := CapHideOurs(true)
+    capCancel := false, capScrolling := true
+    pBmp := 0
+    try {
+        RecShowFrame(r)
+        CapScrollShowPanel(r)
+        Sleep(150)
+        pBmp := CapScrollRun(r, pt)
+    } finally {
+        capScrolling := false
+        CapScrollHidePanel()
+        RecHideFrame()
+        CapShowOurs(hidden)
+        DllCall("SetCursorPos", "int", ox, "int", oy)
+    }
+    return pBmp
+}
+
+; 휠을 굴리고 찍고 이어 붙이기를 되풀이한다. 다 이은 그림(GDI+)을 돌려준다
+CapScrollRun(r, pt) {
+    global capCancel, capScrollNote, CAP_SCROLL_WAIT_MS, CAP_SCROLL_MAX_H, CAP_SCROLL_MAX_STEPS
+    w := r.w, h := r.h
+    prev := CapGrabRaw(r)
+    if !prev
+        return 0
+    ph := CapRowSigs(prev, w, h)
+    strips := [], total := 0
+    top := -1, bot := 0
+    notches := 1, why := "end"
+    loop CAP_SCROLL_MAX_STEPS {
+        if capCancel {
+            why := "stop"
+            break
+        }
+        CapWheel(pt, notches)
+        ; 화면이 바뀔 때까지 (부드러운 스크롤·늦게 그리는 페이지는 조금 더 기다린다)
+        cur := 0
+        loop 3 {
+            Sleep(CAP_SCROLL_WAIT_MS * A_Index)
+            if capCancel
+                break
+            c := CapGrabRaw(r)
+            if !c
+                break
+            chs := CapRowSigs(c, w, h)
+            if !CapSigsEqual(ph, chs) {
+                cur := c
+                break
+            }
+            DllCall("gdiplus\GdipDisposeImage", "ptr", c)
+        }
+        if !cur {
+            why := capCancel ? "stop" : "end"
+            break
+        }
+        if (top < 0)
+            CapStaticBands(ph, chs, h, &top, &bot)
+        d := CapFindShift(ph, chs, h, top, bot)
+        if (d <= 0) {
+            DllCall("gdiplus\GdipDisposeImage", "ptr", cur)
+            why := "lost"
+            break
+        }
+        if (strips.Length = 0) { ; 첫 장: 머리부터 바닥 고정 줄 위까지
+            strips.Push(CapCloneArea(prev, 0, 0, w, h - bot))
+            total := h - bot
+        }
+        strips.Push(CapCloneArea(cur, 0, h - bot - d, w, d)) ; 새로 드러난 줄
+        total += d
+        DllCall("gdiplus\GdipDisposeImage", "ptr", prev)
+        prev := cur, ph := chs
+        ; 다음 휠: 한 번에 보이는 높이의 60%쯤 움직이게 (겹치는 줄이 남아야 맞출 수 있다)
+        band := h - top - bot
+        notches := Max(1, Min(15, Floor(band * 0.6 / Max(1, d / notches))))
+        CapScrollUpdatePanel(strips.Length, total)
+        if (total >= CAP_SCROLL_MAX_H) {
+            why := "max"
+            break
+        }
+    }
+    if (strips.Length = 0) { ; 한 번도 내려가지 않았다 → 그 화면 한 장
+        capScrollNote := "스크롤할 내용이 없어 보이는 화면 한 장만 찍었습니다. 클립보드에 복사했습니다."
+        return prev
+    }
+    if (bot > 0) {
+        strips.Push(CapCloneArea(prev, 0, h - bot, w, bot)) ; 바닥 고정 줄은 마지막 장에서
+        total += bot
+    }
+    DllCall("gdiplus\GdipDisposeImage", "ptr", prev)
+    out := 0
+    DllCall("gdiplus\GdipCreateBitmapFromScan0", "int", w, "int", total, "int", 0, "int", 0x26200A, "ptr", 0, "ptr*", &out)
+    if out {
+        G := 0
+        DllCall("gdiplus\GdipGetImageGraphicsContext", "ptr", out, "ptr*", &G)
+        DllCall("gdiplus\GdipSetCompositingMode", "ptr", G, "int", 1)
+        y := 0
+        for p in strips {
+            CapImageSize(p, &sw, &sh)
+            DllCall("gdiplus\GdipDrawImageRectRectI", "ptr", G, "ptr", p, "int", 0, "int", y, "int", sw, "int", sh
+                , "int", 0, "int", 0, "int", sw, "int", sh, "int", 2, "ptr", 0, "ptr", 0, "ptr", 0) ; UnitPixel
+            y += sh
+        }
+        DllCall("gdiplus\GdipDeleteGraphics", "ptr", G)
+    }
+    for p in strips
+        DllCall("gdiplus\GdipDisposeImage", "ptr", p)
+    msg := Map("end", "끝까지 스크롤해 이어 붙였습니다."
+        , "stop", "멈춘 곳까지 이어 붙였습니다."
+        , "max", "최대 길이(" CAP_SCROLL_MAX_H "px)에 닿아 멈췄습니다."
+        , "lost", "화면이 이어지는 자리를 찾지 못해 거기서 멈췄습니다 (움직이는 그림·고정된 배경이 많은 화면).")[why]
+    capScrollNote := "스크롤 캡처: " msg " 높이 " total "px · 클립보드에 복사했습니다."
+    return out
+}
+
+; 휠을 n칸 아래로 굴린다 (그 자리의 창이 받는다: Windows 10/11은 앞 창이 아니어도 휠을 받는다)
+CapWheel(pt, n) {
+    loop n {
+        DllCall("SetCursorPos", "int", pt.x, "int", pt.y) ; 사용자가 마우스를 움직였어도 그 자리로
+        DllCall("mouse_event", "uint", 0x0800, "uint", 0, "uint", 0, "int", -120, "uptr", 0) ; MOUSEEVENTF_WHEEL
+        Sleep(15)
+    }
+}
+
+; 줄마다 지문: 한 줄에서 표본 픽셀 128개쯤을 골라 해시한다. 한 색으로만 된 줄(여백)은 맞추기에 쓰지 않도록 음수로 둔다.
+; 돌려주는 것: {k: 지문 배열(1부터), s: 밝기 합 배열, n: 한 줄의 표본 수}
+CapRowSigs(p, w, h) {
+    rc := Buffer(16, 0)
+    NumPut("int", 0, "int", 0, "int", w, "int", h, rc)
+    bd := Buffer(16 + 2 * A_PtrSize, 0)
+    if DllCall("gdiplus\GdipBitmapLockBits", "ptr", p, "ptr", rc, "uint", 1, "int", 0x26200A, "ptr", bd) != 0 ; ReadOnly
+        return {k: [], s: [], n: 1}
+    stride := NumGet(bd, 8, "int"), scan := NumGet(bd, 16, "ptr")
+    step := Max(1, w // 128), x0 := step // 2
+    ks := [], ss := []
+    ks.Capacity := h, ss.Capacity := h
+    loop h {
+        row := scan + (A_Index - 1) * stride
+        first := NumGet(row, x0 * 4, "uint") & 0xFFFFFF
+        hv := 2166136261, uni := true, sum := 0, x := x0
+        while (x < w) {
+            px := NumGet(row, x * 4, "uint") & 0xFFFFFF
+            if (px != first)
+                uni := false
+            hv := ((hv ^ px) * 16777619) & 0xFFFFFFFF
+            sum += (px & 0xFF) + ((px >> 8) & 0xFF) + (px >> 16)
+            x += step
+        }
+        ks.Push(uni ? -(first + 1) : hv + 1)
+        ss.Push(sum)
+    }
+    DllCall("gdiplus\GdipBitmapUnlockBits", "ptr", p, "ptr", bd)
+    return {k: ks, s: ss, n: Max(1, Ceil((w - x0) / step))}
+}
+
+CapSigsEqual(a, b) {
+    if (a.k.Length != b.k.Length)
+        return false
+    for i, v in a.k
+        if (v != b.k[i])
+            return false
+    return true
+}
+
+; 위·아래에서 두 장이 그대로인 줄 수 (각각 높이의 1/3까지)
+CapStaticBands(a, b, h, &top, &bot) {
+    lim := h // 3
+    top := 0, bot := 0
+    while (top < lim && a.k[top + 1] = b.k[top + 1])
+        top++
+    while (bot < lim && a.k[h - bot] = b.k[h - bot])
+        bot++
+}
+
+; 새 장의 y줄 = 앞 장의 y+d줄이 되는 d(스크롤한 거리, px). 못 찾으면 0
+CapFindShift(a, b, h, top, bot) {
+    lo := top + 1, hi := h - bot
+    if (hi - lo < 8)
+        return 0
+    ; 1) 지문 표 던지기: 앞 장에 드물게(3번 이하) 나오는 지문만 쓴다 (반복 무늬에 속지 않게)
+    pos := Map()
+    y := lo
+    while (y <= hi) {
+        v := a.k[y]
+        if (v > 0)
+            pos.Has(v) ? pos[v].Push(y) : pos[v] := [y]
+        y++
+    }
+    votes := Map()
+    y := lo
+    while (y <= hi) {
+        v := b.k[y]
+        if (v > 0 && pos.Has(v) && pos[v].Length <= 3)
+            for py in pos[v]
+                if (py > y)
+                    votes[py - y] := votes.Get(py - y, 0) + 1
+        y++
+    }
+    best := 0, bestN := 0
+    for d, n in votes
+        if (n > bestN || (n = bestN && d < best))
+            best := d, bestN := n
+    if (best && bestN >= 3) {
+        cmp := 0, ok := 0, y := lo
+        while (y <= hi - best) {
+            if (b.k[y] > 0 || a.k[y + best] > 0) {
+                cmp++
+                ok += (b.k[y] = a.k[y + best])
+            }
+            y++
+        }
+        if (cmp >= 3 && ok / cmp >= 0.7)
+            return best
+    }
+    ; 2) 밝기 합으로 찾기 (글자가 반 픽셀씩 다르게 그려지는 화면). 겹침이 16줄 이상인 d 가운데 차이가 가장 작은 것
+    bestD := 0, bestE := -1, n := hi - lo + 1
+    d := 1
+    while (d <= n - 16) {
+        e := 0, c := 0, vsum := 0, y := lo
+        while (y <= hi - d) {
+            e += Abs(b.s[y] - a.s[y + d])
+            vsum += Abs(b.s[y] - b.s[lo])
+            c++
+            y += 2
+        }
+        if (c && vsum > 0) {
+            e := e / c
+            if (bestE < 0 || e < bestE)
+                bestE := e, bestD := d
+        }
+        d++
+    }
+    return (bestD && bestE <= a.n * 3 * 1.5) ? bestD : 0 ; 표본 하나·색 하나에 평균 1.5단계 차이까지
+}
+
+; ---------------- 스크롤 캡처 중 표시창 (멈춤 버튼, 캡처에 찍히지 않는다) ----------------
+CapScrollShowPanel(r) {
+    global capScrollPanel, capScrollInfo
+    CapScrollHidePanel()
+    g := Gui("+AlwaysOnTop -Caption +ToolWindow -DPIScale +E0x08000000", "ClassZoom-CapScroll")
+    g.BackColor := "1E293B"
+    g.MarginX := 14, g.MarginY := 10
+    g.SetFont("s11 bold cFFFFFF", "Malgun Gothic")
+    capScrollInfo := g.AddText("w300 h24 +0x200", "스크롤하며 캡처하는 중…")
+    g.SetFont("s10 norm c1E293B", "Malgun Gothic")
+    b := g.AddButton("x+10 yp-2 w110 h28", "멈춤 (Esc)")
+    b.OnEvent("Click", (*) => CapEscCancel())
+    g.Show("AutoSize Hide")
+    g.GetPos(, , &pw, &ph)
+    ; 구역 위에 둘 자리가 있으면 위, 없으면 아래, 둘 다 없으면 구역 안 위쪽 (어디든 캡처에는 찍히지 않는다)
+    if !GetMonitorAt(r.x + r.w // 2, r.y + r.h // 2, &ml, &mt, &mr, &mb, &wl, &wt, &wr, &wb)
+        ml := 0, mt := 0, mr := A_ScreenWidth, mb := A_ScreenHeight
+    x := Max(ml, Min(mr - pw, r.x + (r.w - pw) // 2))
+    y := (r.y - ph - 10 >= mt) ? r.y - ph - 10 : (r.y + r.h + ph + 10 <= mb) ? r.y + r.h + 10 : r.y + 10
+    g.Show("NA x" x " y" y)
+    RecExclude(g.Hwnd)
+    capScrollPanel := g
+}
+
+CapScrollUpdatePanel(n, total) {
+    global capScrollInfo
+    try capScrollInfo.Value := "스크롤하며 캡처하는 중…  " (n - 1) "번 내림 · 높이 " total "px"
+}
+
+CapScrollHidePanel() {
+    global capScrollPanel, capScrollInfo
+    if IsObject(capScrollPanel)
+        try capScrollPanel.Destroy()
+    capScrollPanel := "", capScrollInfo := ""
 }
 
 ; 32비트 ARGB로 잘라 복사한다 (편집할 때 그 위에 그린다)
@@ -662,7 +1005,7 @@ CapLayout() {
         cap.cw := cw, cap.ch := ch
     }
     cap.s := Min(1, (cw - 16) / cap.imgW, (ch - 16) / cap.imgH)
-    cap.s := Max(0.05, cap.s)
+    cap.s := Max(0.01, cap.s) ; 스크롤 캡처처럼 아주 긴 그림도 한눈에 들어오게
     cap.ox := Round((cw - cap.imgW * cap.s) / 2), cap.oy := Round((ch - cap.imgH * cap.s) / 2)
     cap.cacheOk := false
     CapRender()

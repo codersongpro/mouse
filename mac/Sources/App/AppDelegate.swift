@@ -207,6 +207,7 @@ import Combine
             "Capture": { [weak self] in self?.startCapture(.window) }, "CaptureAlt": { [weak self] in self?.startCapture(.window) },
             "CaptureArea": { [weak self] in self?.startCapture(.area) },
             "CaptureScreen": { [weak self] in self?.startCapture(.screen) },
+            "CaptureScroll": { [weak self] in self?.startCapture(.scroll) },
         ]
         let entries: [HotKeyEntry] = SettingsSchema.hotkeys.compactMap { h in
             guard let combo = HotkeyNotation.parse(Settings.shared.hotkeys[h.name] ?? h.def), let action = actions[h.name] else { return nil }
@@ -443,10 +444,23 @@ extension AppDelegate {
         }
         capturer.didPick = { [weak self] in self?.zoom.updateKeys() }
         capturer.onCaptured = { [weak self] img in self?.openCaptureEditor(img) }
-        capturer.onCancelled = { [weak self] in self?.captureEditor?.window.orderFront(nil) }
+        capturer.onScrollCaptured = { [weak self] img, note in self?.openCaptureEditor(img, note: note) }
+        capturer.inkWindows = { [weak self] in self?.draw.inkWindowNumbers ?? [] }
+        capturer.onCancelled = { [weak self] in
+            guard let self else { return }
+            if let e = self.captureEditor {
+                e.window.orderFront(nil)
+            } else if self.zoomResumeStep > 0 { // 스크롤 캡처하느라 껐던 확대를 되돌린다
+                let step = self.zoomResumeStep
+                self.zoomResumeStep = 0
+                self.zoom.start(step: step)
+            }
+        }
     }
 
     func startCapture(_ mode: Capturer.Mode) {
+        // 스크롤 캡처 중에 캡처 키를 다시 누르면 멈춘다 (거기까지 이은 그림이 편집 창에 뜬다)
+        if capturer.isScrolling { capturer.stopScroll(); return }
         // 저장하지 않은 편집 창이 있으면 먼저 묻는다
         if let e = captureEditor, e.dirty {
             let a = NSAlert()
@@ -458,10 +472,17 @@ extension AppDelegate {
             guard a.runModal() == .alertSecondButtonReturn else { return }
         }
         captureEditor?.window.orderOut(nil) // 찍히지 않게
+        // 스크롤 캡처는 확대를 먼저 끈다 (확대 화면에서는 휠을 굴리는 자리·찍는 자리가 어긋난다). 편집 창을 닫으면 다시 켠다
+        if mode == .scroll, zoom.isOn {
+            zoomResumeStep = zoom.step
+            zoom.stop()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in self?.capturer.capture(.scroll) }
+            return
+        }
         capturer.capture(mode)
     }
 
-    func openCaptureEditor(_ img: CGImage) {
+    func openCaptureEditor(_ img: CGImage, note: String? = nil) {
         _ = copyImageToPasteboard(img) // 찍자마자 붙여넣기할 수 있게
         if let old = captureEditor {
             old.onClose = {}
@@ -484,5 +505,6 @@ extension AppDelegate {
         }
         captureEditor = e
         e.show()
+        if let note { e.showNote(note) }
     }
 }

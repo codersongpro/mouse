@@ -9,7 +9,7 @@
 ;@Ahk2Exe-SetMainIcon classzoom.ico
 ;@Ahk2Exe-SetName ClassZoom
 ;@Ahk2Exe-SetDescription ClassZoom
-;@Ahk2Exe-SetVersion 1.4.1
+;@Ahk2Exe-SetVersion 1.4.2
 ;@Ahk2Exe-SetCopyright © 2026 송동석 (Songpro / Dustin). MIT License
 ;@Ahk2Exe-SetCompanyName Songpro
 
@@ -57,7 +57,7 @@ OnExit((*) => DllCall("winmm\timeEndPeriod", "uint", 1))
 ; 배포한 베타에서 피드백을 받을 때 "어느 빌드인지"를 구분할 수 있어야 해서 버전을 표시한다.
 ; 위 SetVersion 지시문(exe 파일 속성용)과 여기 값을 항상 같이 고쳐야 한다 — 지시문은 주석이라
 ; 프로그램 안에서 읽을 수 없어서, 아쉽지만 두 곳에 같은 숫자를 적어두는 수밖에 없다.
-APP_VERSION := "1.4.1"
+APP_VERSION := "1.4.2"
 
 ; 새 버전 확인 (docs/update-check.md). 설정 창을 열 때만 저장소 맨 위 version.txt 하나를 읽는다 —
 ; 프로그램을 켤 때·수업 중에는 접속하지 않고 알림 창도 띄우지 않는다(선생님 결정 2026-10-29, 맥 판과 같음).
@@ -92,9 +92,9 @@ ShowTermsNotice(owner := 0) {
         . "5. 개인정보`r`n· 개인정보를 수집하거나 외부로 보내지 않습니다. 회원 가입·로그인도 없습니다.`r`n"
         . "· 인터넷은 설정 창을 열 때 새 버전을 확인하는 데에만 씁니다(버전 파일 1개 읽기).`r`n"
         . "· 캡처한 그림, 녹화한 영상, 설정 파일은 이 컴퓨터에만 저장됩니다.`r`n`r`n"
-        . "6. 함께 쓰는 공개 소프트웨어`r`n· FFmpeg (GNU LGPL 2.1): 화면 녹화에 수정하지 않고 그대로 씁니다. 라이선스 전문은 처음 녹화할 때 %LOCALAPPDATA%\ClassZoom\engine 폴더에 꺼내지고, zip 판의 licenses 폴더에도 있습니다. 소스: ffmpeg.org`r`n"
+        . "6. 함께 쓰는 공개 소프트웨어`r`n· FFmpeg (GNU LGPL 2.1): 화면 녹화에 수정하지 않고 그대로 씁니다. 라이선스 전문은 처음 녹화할 때 %LOCALAPPDATA%\ClassZoom\engine 폴더에 꺼내지고 zip 판의 licenses 폴더에도 있습니다. 소스: ffmpeg.org`r`n"
         . "· AutoHotkey v2: Windows 판을 만든 도구입니다. autohotkey.com`r`n`r`n"
-        . "7. 문의`r`nsongpro.app 또는 GitHub 이슈(github.com/codersongpro/mouse/issues)"
+        . "7. 문의`r`nsongpro.app"
     g := Gui("+AlwaysOnTop -MinimizeBox -MaximizeBox" (owner ? " +Owner" owner : ""), "ClassZoom — 저작권 및 이용 약관")
     termsGui := g
     g.BackColor := "FFFFFF"
@@ -159,17 +159,17 @@ DllCall("gdiplus\GdiplusStartup", "ptr*", &gdipToken, "ptr", gdipStartupInput, "
 ; 하나 등록할 때마다 그 키를 Windows 전체에서 빼앗으므로, 값어치가 낮은 것은 두지 않는 게 낫다.
 HOTKEY_DEFAULTS := Map("Spotlight", "F8", "Draw", "F9", "Zoom", "F7"
     , "Record", "F10", "RecordPause", "^F10", "RecordArea", "^+F10"
-    , "Capture", "F6", "CaptureArea", "^+F6", "CaptureScreen", "+F6")
+    , "Capture", "F6", "CaptureArea", "^+F6", "CaptureScreen", "+F6", "CaptureScroll", "^F6")
 HOTKEY_LABELS := Map("Spotlight", "하이라이트", "Draw", "드로잉", "Zoom", "라이브 줌"
     , "Record", "녹화", "RecordPause", "일시정지", "RecordArea", "영역 녹화"
-    , "Capture", "창 캡처", "CaptureArea", "구역 캡처", "CaptureScreen", "전체 캡처")
+    , "Capture", "창 캡처", "CaptureArea", "구역 캡처", "CaptureScreen", "전체 캡처", "CaptureScroll", "스크롤 캡처")
 ; 녹화·캡처 단축키는 앞 프로그램에 넘기지 않고 삼킨다. F10은 대부분의 프로그램에서 메뉴 막대를 여는
 ; 키라서, 넘기면 녹화를 시작·정지할 때마다 앞 프로그램의 메뉴가 열린다. F6도 한글에서 스타일 창을
 ; 여는 키라서 넘기면 그 창이 떠서 캡처에 함께 찍힌다(2026-11-25 사용자 결정: 넘기지 않음).
-HOTKEY_NO_PASS := Map("Record", 1, "RecordPause", 1, "RecordArea", 1, "Capture", 1, "CaptureArea", 1, "CaptureScreen", 1)
+HOTKEY_NO_PASS := Map("Record", 1, "RecordPause", 1, "RecordArea", 1, "Capture", 1, "CaptureArea", 1, "CaptureScreen", 1, "CaptureScroll", 1)
 ; 나중에 생긴 단축키(캡처 F6 등). 예전에 다른 기능을 이 키로 바꿔 둔 PC에서는 새 기본값이 그 키를 조용히
 ; 가로채지 않도록, 켤 때 겹치면 이쪽을 비워 둔다(LoadSettings). 설정 → 단축키에서 다른 키로 정하면 된다.
-HOTKEY_LATER := ["Capture", "CaptureArea", "CaptureScreen"]
+HOTKEY_LATER := ["Capture", "CaptureArea", "CaptureScreen", "CaptureScroll"]
 hotkeyBlanked := [] ; 위 이유로 비워 둔 기능 이름 (켤 때 한 번 알린다)
 hotkeyCombos := Map()     ; 지금 설정된 조합 (settings.ini에서 불러옴)
 hotkeyRegistered := Map() ; 실제로 등록에 성공해 살아있는 조합 (해제할 때 필요)
@@ -4303,16 +4303,16 @@ OpenSettingsWindow(*) {
     ;  안쪽 내용이 아래로 밀리므로, 탭을 추가할 때는 창 너비도 같이 넓혀야 한다)
     ; 높이는 가장 내용이 많은 "드로잉" 탭에 맞춰져 있다. 색 목록(스크롤되는 칸)이 아래쪽
     ; y536까지 내려오므로, 그보다 줄이면 잘린다 — 여기와 아래 버튼 위치, 창 높이를 같이 봐야 한다.
-    ; "포인터"와 "클릭효과"를 **"포커스" 한 탭으로 합쳤다.** 셋 다 마우스 자리를 짚어주는
+    ; "포인터"와 "클릭효과"를 **"하이라이트" 한 탭으로 합쳤다(예전 이름 "포커스").** 셋 다 마우스 자리를 짚어주는
     ; 같은 목적의 기능이라 나눠 둘 이유가 없었고, 나뉘어 있으면 클릭효과의 색이 하이라이트와
     ; 다른 색이라는 것도 눈에 안 들어온다. 대신 탭 안에서 테두리 상자로 셋을 갈라둔다.
     ; "확대" 탭을 더해 여섯 개다 — 위 설명대로 이 너비에서 한 줄에 들어간다.
     ; "녹화" 탭까지 일곱 개라 창을 넓혔다 (여섯 개까지가 w460에 한 줄로 들어갔다).
-    tabs := settingsGui.AddTab3("x10 y10 w540 h552", ["일반", "포커스", "드로잉", "확대", "녹화", "위젯", "단축키"])
+    tabs := settingsGui.AddTab3("x10 y10 w540 h552", ["일반", "하이라이트", "드로잉", "확대", "녹화", "위젯", "단축키"])
 
-    tabs.UseTab("포커스")
+    tabs.UseTab("하이라이트")
     ; --- 하이라이트 ---
-    settingsGui.AddGroupBox("x22 y42 w436 h158", "포커스 하이라이트")
+    settingsGui.AddGroupBox("x22 y42 w436 h158", "마우스 하이라이트")
     ; 체크박스 라벨 텍스트까지 클릭 영역에 포함되면 실수로 누르기 쉬워서, 네모 칸만 클릭
     ; 가능하게 하고 글자는 옆에 별도의(클릭 안 되는) 텍스트로 둔다.
     chkHideCursor := settingsGui.AddCheckbox("x36 y70 w20 h20 " (hideCursorOnHighlight ? "Checked" : ""), "")
@@ -4325,7 +4325,7 @@ OpenSettingsWindow(*) {
     ; --- 왼쪽 클릭 효과 --- (켜고 끄는 체크박스를 상자 제목 자리에 얹는다)
     settingsGui.AddGroupBox("x22 y212 w436 h164", "")
     chkClick := settingsGui.AddCheckbox("x36 y204 w20 h20 " (clickEffectEnabled ? "Checked" : ""), "")
-    settingsGui.AddText("x60 y205 w300", "포커스 클릭효과 (좌클릭)")
+    settingsGui.AddText("x60 y205 w300", "클릭 효과 (좌클릭)")
     lClickRows := []
     AddAll(lClickRows, AddColorRow(settingsGui, 240, "Click"))
     AddAll(lClickRows, AddSliderRow(settingsGui, 272, "테두리 굵기", 2, 12, SpotThickness, "", (v) => SpotThickness := v))
@@ -4340,7 +4340,7 @@ OpenSettingsWindow(*) {
     ; --- 오른쪽 클릭 효과 ---
     settingsGui.AddGroupBox("x22 y388 w436 h164", "")
     chkRClick := settingsGui.AddCheckbox("x36 y380 w20 h20 " (rclickEffectEnabled ? "Checked" : ""), "")
-    settingsGui.AddText("x60 y381 w300", "포커스 클릭효과 (우클릭)")
+    settingsGui.AddText("x60 y381 w300", "클릭 효과 (우클릭)")
     rClickRows := []
     AddAll(rClickRows, AddColorRow(settingsGui, 416, "RClick"))
     AddAll(rClickRows, AddSliderRow(settingsGui, 448, "테두리 굵기", 2, 12, rclickThickness, "", (v) => rclickThickness := v))
@@ -4387,7 +4387,7 @@ OpenSettingsWindow(*) {
         . "• 확대 중 Ctrl + 마우스 휠: 단계 올리기·내리기   /   Esc: 확대 끄기`n`n"
         . "• 화면을 캡처한 그림이 아니라 실시간 화면입니다. 영상도 그대로 움직입니다.`n"
         . "• 확대 화면은 고정되고 커서만 움직입니다. 커서를 가장자리 쪽으로 가져가면 그쪽으로 이동합니다.`n"
-        . "• 커서가 가리키는 곳이 그대로 클릭되고, 확대한 채로 그릴 수도 있습니다(F9).`n`n"
+        . "• 커서가 가리키는 곳이 그대로 클릭되고 확대한 채로 그릴 수도 있습니다(F9).`n`n"
         . "• Zoom·Google Meet 화면 공유와 녹화에 확대 화면이 그대로 보이고, 마우스 커서는 하나만 보입니다.`n"
         . "  공유할 때는 '창'이 아니라 '화면 전체'를 고르세요.")
     lblZoomHelp.SetFont("s9 c555555")
@@ -4522,11 +4522,11 @@ OpenSettingsWindow(*) {
     tabs.UseTab("단축키")
     ; 기본 키 순서(F6 → F7 → F8 → F9 → F10)대로 늘어놓는다 — 위젯·안내문·랜딩페이지와 같은 순서
     y := 44
-    for name in ["Capture", "CaptureScreen", "CaptureArea", "Zoom", "Spotlight", "Draw", "Record", "RecordPause", "RecordArea"] {
+    for name in ["Capture", "CaptureScreen", "CaptureArea", "CaptureScroll", "Zoom", "Spotlight", "Draw", "Record", "RecordPause", "RecordArea"] {
         AddHotkeyRow(settingsGui, y, name)
         y += 34
     }
-    lblHotkeyHelp := settingsGui.AddText("x30 y" (y + 2) " w490 h44", "칸을 누른 뒤 원하는 키를 누르면 바뀝니다. 글자 키는 Ctrl이나 Alt와 함께 눌러야 합니다.`n다른 기능과 같은 키, Windows가 쓰는 키(Alt+Tab 등)는 쓸 수 없고, 다른 프로그램에서도 쓰는 키(F5, Ctrl+C 등)는 겹친다고 알려 드립니다.")
+    lblHotkeyHelp := settingsGui.AddText("x30 y" (y + 2) " w490 h44", "칸을 누른 뒤 원하는 키를 누르면 바뀝니다. 글자 키는 Ctrl이나 Alt와 함께 눌러야 합니다.`n다른 기능과 같은 키, Windows가 쓰는 키(Alt+Tab 등)는 쓸 수 없고 다른 프로그램에서도 쓰는 키(F5, Ctrl+C 등)는 겹친다고 알려 드립니다.")
     lblHotkeyHelp.SetFont("s9 c999999")
 
     ; 드로잉 중에만 쓰는 키(도형·색·굵기·지우기)는 여기 글로 늘어놓지 않는다. **키보드 그림
@@ -5422,12 +5422,13 @@ ClampWidgetIntoScreen() {
 
 WidgetContextMenu(g, ctrl, *) {
     global btnRecOff, btnRecOn, recState, boardMode, btnCap
-    ; 캡처 버튼: 창 / 구역 지정 / 전체 화면
+    ; 캡처 버튼: 창 / 구역 지정 / 전체 화면 / 스크롤
     if (IsObject(ctrl) && ctrl = btnCap) {
         m := Menu()
         m.Add("창 캡처" WidgetTipKey("Capture"), CapWindow)
         m.Add("구역 지정 캡처" WidgetTipKey("CaptureArea"), CapArea)
         m.Add("전체 화면 캡처" WidgetTipKey("CaptureScreen"), CapScreen)
+        m.Add("스크롤 캡처" WidgetTipKey("CaptureScroll"), CapScroll)
         m.Show()
         return
     }
@@ -5634,7 +5635,7 @@ SetTrayIconsVisible(show) {
     global showTrayIcons, hIconSpotOff, hIconSpotOn, hIconDrawOff, hIconDrawOn, spotlightOn, drawOn
     showTrayIcons := show
     if show {
-        AddQuickTrayIcon(1, spotlightOn ? hIconSpotOn : hIconSpotOff, "강조 켜기/끄기")
+        AddQuickTrayIcon(1, spotlightOn ? hIconSpotOn : hIconSpotOff, "하이라이트 켜기/끄기")
         AddQuickTrayIcon(2, drawOn ? hIconDrawOn : hIconDrawOff, "드로잉 켜기/끄기")
     } else {
         RemoveQuickTrayIcon(1)
@@ -5811,7 +5812,7 @@ MaybeAskBoardMode() {
     }
     boardModeAsked := true
     try IniWrite(1, SETTINGS_PATH, "Common", "BoardModeAsked")
-    if (MsgBox("터치 화면이 있는 PC입니다.`n`n전자칠판 모드로 쓸까요?`n위젯이 크게 세로로 바뀌고, 확대 +/− 버튼과 드로잉 팔레트(색 · 굵기 · 지우개)가 생깁니다.`n`n나중에 설정 → 위젯 탭이나 위젯을 길게 눌러 바꿀 수 있습니다."
+    if (MsgBox("터치 화면이 있는 PC입니다.`n`n전자칠판 모드로 쓸까요?`n위젯이 크게 세로로 바뀌고 확대 +/− 버튼과 드로잉 팔레트(색 · 굵기 · 지우개)가 생깁니다.`n`n나중에 설정 → 위젯 탭이나 위젯을 길게 눌러 바꿀 수 있습니다."
         , "ClassZoom - 전자칠판 모드", "YesNo Icon?") = "Yes")
         SetBoardMode(true)
 }
@@ -5828,7 +5829,7 @@ WidgetTipText(kind) {
     case "grip": return "끌어서 옮기기"
     case "spot": return "마우스 하이라이트" WidgetTipKey("Spotlight")
     case "draw": return "드로잉" WidgetTipKey("Draw")
-    case "cap": return "화면 캡처" WidgetTipKey("Capture") " · 클릭: 창 · 끌기: 구역 · 오른쪽 클릭: 전체 화면"
+    case "cap": return "화면 캡처" WidgetTipKey("Capture") " · 클릭: 창 · 끌기: 구역 · 오른쪽 클릭: 전체 화면·스크롤"
     case "zoom": return "라이브 줌" WidgetTipKey("Zoom") " · 누를 때마다 1 → 2 → 3단계 → 끄기"
     case "zplus": return "확대 단계 올리기"
     case "zminus": return "확대 단계 내리기 (1단계에서 누르면 끄기)"
@@ -5934,7 +5935,7 @@ SetWidgetVisible(showWidget) ; 트레이 메뉴 체크 표시까지 시작 상�
 ; 이름 → 실제로 실행할 동작. 설정 창에서 조합을 바꿔도 동작은 그대로이므로 여기서 한 번만 묶는다.
 HOTKEY_ACTIONS := Map("Spotlight", ToggleSpotlight, "Draw", ToggleDraw, "Zoom", ToggleZoom
     , "Record", RecToggle, "RecordPause", RecPauseToggle, "RecordArea", RecToggleArea
-    , "Capture", CapWindow, "CaptureArea", CapArea, "CaptureScreen", CapScreen)
+    , "Capture", CapWindow, "CaptureArea", CapArea, "CaptureScreen", CapScreen, "CaptureScroll", CapScroll)
 
 ; 저장해둔 조합으로 전역 단축키를 켠다. 다른 프로그램이 이미 쓰는 조합이면 등록에 실패하는데,
 ; 시작하자마자 오류 창을 띄우면 수업 중에 곤란하므로 조용히 건너뛴다(위젯과 트레이는 그대로 동작).
@@ -6225,13 +6226,13 @@ ChangeHotkey(name, combo, ctrl) {
     reason := ""
     sysUse := HotkeySystemUse(combo)
     if (sysUse != "")
-        reason := HotkeyText(combo) "는 " sysUse "`n이 키는 ClassZoom 단축키로 쓸 수 없습니다. 다른 조합으로 정해주세요."
+        reason := HotkeyText(combo) "는 " sysUse "`n이 키는 ClassZoom 단축키로 쓸 수 없습니다. 다른 조합으로 정해 주세요."
     else if !IsSafeHotkey(combo)
-        reason := "Ctrl이나 Alt를 함께 누르는 조합으로 정해주세요.`n`n글자 키 하나만 지정하면 글을 쓰는 동안 그 글자를 칠 때마다 기능이 켜지고 꺼집니다. (F1~F12 같은 기능키는 단독으로도 됩니다)"
+        reason := "Ctrl이나 Alt를 함께 누르는 조합으로 정해 주세요.`n`n글자 키 하나만 지정하면 글을 쓰는 동안 그 글자를 칠 때마다 기능이 켜지고 꺼집니다. (F1~F12 같은 기능키는 단독으로도 됩니다)"
     else {
         for otherName, otherCombo in hotkeyCombos {
             if (otherName != name && otherCombo = combo) {
-                reason := "이미 " HOTKEY_LABELS[otherName] " 기능에 쓰고 있는 조합입니다.`n다른 조합으로 정해주세요."
+                reason := "이미 " HOTKEY_LABELS[otherName] " 기능에 쓰고 있는 조합입니다.`n다른 조합으로 정해 주세요."
                 break
             }
         }
@@ -6253,7 +6254,7 @@ ChangeHotkey(name, combo, ctrl) {
         }
     }
     if (reason = "" && !RegisterHotkey(name, combo)) {
-        reason := "이 조합은 단축키로 등록할 수 없습니다.`n다른 조합으로 정해주세요."
+        reason := "이 조합은 단축키로 등록할 수 없습니다.`n다른 조합으로 정해 주세요."
         RegisterHotkey(name, old) ; 원래 단축키를 되살려서 아무것도 안 먹는 상태를 피한다
     }
 
